@@ -1,0 +1,66 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+publish/
+artifacts/
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+project.lock.json
+
+# Test results & coverage
+TestResults/
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage/
+*.cobertura.xml
+.msCoverageSourceRootsMapping_*
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+*.VC.db
+*.VC.VC.opendb
+
+# JetBrains Rider / ReSharper
+.idea/
+*.sln.iml
+_ReSharper*/
+*.DotSettings.user
+
+# VS Code (keep shared config)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# Logs
+*.log
+logs/
+
+# Local secrets / environment
+.env
+.env.*
+!.env.example
+secrets.json
+appsettings.Local.json
+appsettings.*.Local.json
+*.pfx
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini

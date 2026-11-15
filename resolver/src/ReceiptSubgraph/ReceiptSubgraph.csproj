@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>ReceiptSubgraph</RootNamespace>
+    <!-- Surface XML docs as GraphQL descriptions -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- Non-concurrent GC avoids a background GC thread and suits a request/response API -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="HotChocolate.AspNetCore" />
+    <PackageReference Include="HotChocolate.ApolloFederation" />
+    <!-- Source generators: resolvers, DataLoaders and type registration are generated at build time (no reflection) -->
+    <PackageReference Include="HotChocolate.Types.Analyzers" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ReceiptSubgraph.Tests" />
+  </ItemGroup>
+
+</Project>
