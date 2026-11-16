@@ -12,15 +12,24 @@ internal sealed class RecordingReceiptRepository(IReceiptRepository inner) : IRe
 {
     private readonly List<IReadOnlyList<string>> _idLookups = [];
     private readonly List<(ReceiptOwnerKind Kind, string[] OwnerIds, ReceiptResultInput? Input)> _ownerLookups = [];
+    private Exception? _failure;
 
     public IReadOnlyList<IReadOnlyList<string>> IdLookups => _idLookups;
 
     public IReadOnlyList<(ReceiptOwnerKind Kind, string[] OwnerIds, ReceiptResultInput? Input)> OwnerLookups => _ownerLookups;
 
+    /// <summary>Makes every following lookup throw, to simulate the backing store being unavailable.</summary>
+    public void FailWith(Exception failure) => _failure = failure;
+
     public ValueTask<IReadOnlyDictionary<string, Receipt>> GetByIdsAsync(
         IReadOnlyList<string> receiptIds,
         CancellationToken cancellationToken)
     {
+        if (_failure is not null)
+        {
+            throw _failure;
+        }
+
         // The DataLoader reuses its key list, so keep a copy.
         lock (_idLookups)
         {
@@ -36,6 +45,11 @@ internal sealed class RecordingReceiptRepository(IReceiptRepository inner) : IRe
         ReceiptResultInput? input,
         CancellationToken cancellationToken)
     {
+        if (_failure is not null)
+        {
+            throw _failure;
+        }
+
         lock (_ownerLookups)
         {
             _ownerLookups.Add((ownerKind, ownerIds.ToArray(), input));

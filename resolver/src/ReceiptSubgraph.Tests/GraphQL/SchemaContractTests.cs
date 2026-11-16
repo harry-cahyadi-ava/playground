@@ -27,6 +27,20 @@ public class SchemaContractTests : IAsyncLifetime
         foreach (var expected in contractTypes)
         {
             Assert.True(actual.TryGetValue(expected.Name.Value, out var found), $"Type '{expected.Name.Value}' is missing from the subgraph.");
+
+            // Federation adds _entities and _service to Query, so only the fields the contract declares are compared.
+            if (expected is ObjectTypeDefinitionNode { Name.Value: "Query" } query)
+            {
+                var actualFields = ((ObjectTypeDefinitionNode)found!).Fields.Select(Field).ToHashSet();
+
+                foreach (var field in query.Fields.Select(Field))
+                {
+                    Assert.Contains(field, actualFields);
+                }
+
+                continue;
+            }
+
             Assert.Equal(Describe(expected), Describe(found!));
         }
     }
@@ -45,7 +59,8 @@ public class SchemaContractTests : IAsyncLifetime
     {
         var sdl = await LoadSdlAsync();
 
-        Assert.Contains("union _Entity = Customer | Order | Receipt", sdl);
+        // Customer and Order are references only, so Receipt is the sole resolvable entity.
+        Assert.Matches(@"union _Entity = Receipt\s*(\r?\n|$)", sdl);
     }
 
     [Fact]

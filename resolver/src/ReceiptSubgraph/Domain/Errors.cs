@@ -9,14 +9,14 @@ public interface IError
     string Message { get; }
 }
 
-// The Customer subgraph owns the root query and returns these in its response unions,
+// Other subgraphs return the same error types in their response unions,
 // so they are declared @shareable here to keep supergraph composition valid.
 
 [Shareable]
-public sealed record NotFoundError(string Message) : IError;
+public sealed record NotFoundError(string Message) : IError, IReceiptResponse;
 
 [Shareable]
-public sealed record UnauthorizedError(string Message) : IError;
+public sealed record UnauthorizedError(string Message) : IError, IReceiptResponse, IReceiptsResponse;
 
 [Shareable]
-public sealed record InternalServerError(string Message) : IError;
+public sealed record InternalServerError(string Message) : IError, IReceiptResponse, IReceiptsResponse;

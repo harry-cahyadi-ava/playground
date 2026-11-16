@@ -3,6 +3,7 @@ using HotChocolate;
 using HotChocolate.Execution;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ReceiptSubgraph.Authorization;
 using ReceiptSubgraph.Data;
 using ReceiptSubgraph.Domain;
 using ReceiptSubgraph.Paging;
@@ -42,14 +43,19 @@ internal sealed class SubgraphHarness : IAsyncDisposable
         return new SubgraphHarness(services, executor, repository);
     }
 
-    /// <summary>Executes a query and returns the JSON response as a document.</summary>
-    public async Task<JsonDocument> QueryAsync(string query, Dictionary<string, object?>? variables = null)
+    /// <summary>Executes a query and returns the JSON response as a document, optionally as a signed-in customer.</summary>
+    public async Task<JsonDocument> QueryAsync(string query, Dictionary<string, object?>? variables = null, string? customerId = null)
     {
         var request = OperationRequestBuilder.New().SetDocument(query);
 
         if (variables is not null)
         {
             request.SetVariableValues(variables);
+        }
+
+        if (customerId is not null)
+        {
+            request.SetGlobalState(UserContext.GlobalStateKey, new UserContext { CustomerId = customerId });
         }
 
         var result = await Executor.ExecuteAsync(request.Build(), TestContext.Current.CancellationToken);

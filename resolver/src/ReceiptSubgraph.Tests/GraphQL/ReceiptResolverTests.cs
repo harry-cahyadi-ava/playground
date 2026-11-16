@@ -213,14 +213,20 @@ public class ReceiptResolverTests : IAsyncLifetime
         Assert.Equal("14.80", entities[0].GetProperty("amount").GetProperty("total").GetRawText());
     }
 
-    [Fact]
-    public async Task Customer_receipts_are_newest_first_and_report_page_info()
+    private async Task<JsonElement> ReceiptsAsync(string query, string? customerId = "customer-1", Dictionary<string, object?>? variables = null)
     {
-        var entities = await EntitiesAsync(
-            "... on Customer { receipts { edges { cursor node { id } } pageInfo { hasNextPage startCursor endCursor } totalCount } }",
-            ("Customer", "customer-1"));
+        var result = await _harness.QueryAsync(query, variables, customerId);
+        Assert.False(result.RootElement.TryGetProperty("errors", out var errors), errors.ToString());
+        return result.RootElement.GetProperty("data");
+    }
 
-        var result = entities[0].GetProperty("receipts");
+    [Fact]
+    public async Task Receipts_are_newest_first_and_report_page_info()
+    {
+        var data = await ReceiptsAsync(
+            "{ receipts { ... on ReceiptConnection { edges { cursor node { id } } pageInfo { hasNextPage startCursor endCursor } totalCount } } }");
+
+        var result = data.GetProperty("receipts");
         var edges = result.GetProperty("edges");
         Assert.Equal(["receipt-3", "receipt-2", "receipt-1"], edges.EnumerateArray().Select(e => e.GetProperty("node").GetProperty("id").GetString()));
         Assert.False(result.GetProperty("pageInfo").GetProperty("hasNextPage").GetBoolean());
@@ -230,20 +236,19 @@ public class ReceiptResolverTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Customer_receipts_honour_filter_and_pagination()
+    public async Task Receipts_honour_filter_and_pagination()
     {
-        var entities = await EntitiesAsync(
+        var data = await ReceiptsAsync(
             """
-            ... on Customer {
+            {
               receipts(input: {
                 filter: { storeSalesChannel: COLES_ONLINE, dateFrom: "2025-11-01T00:00:00Z" }
                 pagination: { first: 1 }
-              }) { edges { node { id } } pageInfo { hasNextPage } totalCount }
+              }) { ... on ReceiptConnection { edges { node { id } } pageInfo { hasNextPage } totalCount } }
             }
-            """,
-            ("Customer", "customer-1"));
+            """);
 
-        var result = entities[0].GetProperty("receipts");
+        var result = data.GetProperty("receipts");
         Assert.Equal(["receipt-3"], result.GetProperty("edges").EnumerateArray().Select(e => e.GetProperty("node").GetProperty("id").GetString()));
         Assert.True(result.GetProperty("pageInfo").GetProperty("hasNextPage").GetBoolean());
         Assert.Equal(2, result.GetProperty("totalCount").GetInt32());
@@ -265,29 +270,21 @@ public class ReceiptResolverTests : IAsyncLifetime
             },
         };
 
-        using var result = await _harness.QueryAsync(
-            """
-            query($input: ReceiptsInput) {
-              _entities(representations: [{ __typename: "Customer", id: "customer-1" }]) {
-                ... on Customer { receipts(input: $input) { edges { node { id } } } }
-              }
-            }
-            """,
-            variables);
+        var data = await ReceiptsAsync(
+            "query($input: ReceiptsInput) { receipts(input: $input) { ... on ReceiptConnection { edges { node { id } } } } }",
+            variables: variables);
 
-        var receipts = result.RootElement.GetProperty("data").GetProperty("_entities")[0]
-            .GetProperty("receipts").GetProperty("edges");
+        var receipts = data.GetProperty("receipts").GetProperty("edges");
         Assert.Equal(["receipt-2"], receipts.EnumerateArray().Select(e => e.GetProperty("node").GetProperty("id").GetString()));
     }
 
     [Fact]
-    public async Task Order_receipts_include_returns_against_the_same_order()
+    public async Task Receipts_include_returns_against_the_same_order()
     {
-        var entities = await EntitiesAsync(
-            "... on Order { receipts { edges { node { id return } } } }",
-            ("Order", "order-1001"));
+        var data = await ReceiptsAsync(
+            "{ receipts(input: { filter: { orderIds: [\"order-1001\"] } }) { ... on ReceiptConnection { edges { node { id return } } } } }");
 
-        var receipts = entities[0].GetProperty("receipts").GetProperty("edges").EnumerateArray().Select(e => e.GetProperty("node")).ToList();
+        var receipts = data.GetProperty("receipts").GetProperty("edges").EnumerateArray().Select(e => e.GetProperty("node")).ToList();
         Assert.Equal(["receipt-3", "receipt-2"], receipts.Select(r => r.GetProperty("id").GetString()));
         Assert.True(receipts[0].GetProperty("return").GetBoolean());
     }
@@ -295,79 +292,102 @@ public class ReceiptResolverTests : IAsyncLifetime
     [Fact]
     public async Task Customer_without_receipts_gets_an_empty_result_not_an_error()
     {
-        var entities = await EntitiesAsync(
-            "... on Customer { receipts { edges { node { id } } pageInfo { hasNextPage } totalCount } }",
-            ("Customer", "nobody"));
+        var data = await ReceiptsAsync(
+            "{ receipts { ... on ReceiptConnection { edges { node { id } } pageInfo { hasNextPage } totalCount } } }",
+            customerId: "nobody");
 
-        var result = entities[0].GetProperty("receipts");
+        var result = data.GetProperty("receipts");
         Assert.Equal(0, result.GetProperty("edges").GetArrayLength());
         Assert.Equal(0, result.GetProperty("totalCount").GetInt32());
     }
 
     [Fact]
-    public async Task Resolving_the_entity_reference_itself_does_not_touch_the_repository()
+    public async Task Receipts_only_ever_come_from_the_signed_in_customer()
     {
-        await EntitiesAsync("... on Customer { id } ... on Order { id }", ("Customer", "c1"), ("Order", "o1"));
-
-        Assert.Empty(_harness.Repository.IdLookups);
-        Assert.Empty(_harness.Repository.OwnerLookups);
-    }
-
-    [Fact]
-    public async Task Receipt_lists_for_many_customers_are_batched_into_one_repository_call()
-    {
-        await EntitiesAsync(
-            "... on Customer { receipts { edges { node { id } } } }",
-            ("Customer", "customer-1"), ("Customer", "customer-2"), ("Customer", "customer-3"));
+        await ReceiptsAsync("{ receipts { __typename } }", customerId: "customer-2");
 
         var lookup = Assert.Single(_harness.Repository.OwnerLookups);
         Assert.Equal(ReceiptOwnerKind.Customer, lookup.Kind);
-        Assert.Equal(["customer-1", "customer-2", "customer-3"], lookup.OwnerIds.Order());
-    }
-
-    [Fact]
-    public async Task Customers_and_orders_are_looked_up_separately_but_each_only_once()
-    {
-        await EntitiesAsync(
-            "... on Customer { receipts { edges { node { id } } } } ... on Order { receipts { edges { node { id } } } }",
-            ("Customer", "customer-1"), ("Customer", "customer-2"), ("Order", "order-1001"), ("Order", "order-2"));
-
-        Assert.Equal(2, _harness.Repository.OwnerLookups.Count);
-        Assert.Contains(_harness.Repository.OwnerLookups, l => l.Kind == ReceiptOwnerKind.Customer && l.OwnerIds.Length == 2);
-        Assert.Contains(_harness.Repository.OwnerLookups, l => l.Kind == ReceiptOwnerKind.Order && l.OwnerIds.Length == 2);
+        Assert.Equal(["customer-2"], lookup.OwnerIds);
     }
 
     [Fact]
     public async Task Same_field_with_different_arguments_is_not_served_from_the_wrong_cache_entry()
     {
-        using var result = await _harness.QueryAsync(
+        var data = await ReceiptsAsync(
             """
             {
-              _entities(representations: [{ __typename: "Customer", id: "customer-1" }]) {
-                ... on Customer {
-                  newest: receipts(input: { pagination: { first: 1 } }) { edges { node { id } } }
-                  oldest: receipts(input: { pagination: { last: 1 } }) { edges { node { id } } }
-                }
-              }
+              newest: receipts(input: { pagination: { first: 1 } }) { ... on ReceiptConnection { edges { node { id } } } }
+              oldest: receipts(input: { pagination: { last: 1 } }) { ... on ReceiptConnection { edges { node { id } } } }
             }
             """);
 
-        var customer = result.RootElement.GetProperty("data").GetProperty("_entities")[0];
-        Assert.Equal("receipt-3", customer.GetProperty("newest").GetProperty("edges")[0].GetProperty("node").GetProperty("id").GetString());
-        Assert.Equal("receipt-1", customer.GetProperty("oldest").GetProperty("edges")[0].GetProperty("node").GetProperty("id").GetString());
+        Assert.Equal("receipt-3", data.GetProperty("newest").GetProperty("edges")[0].GetProperty("node").GetProperty("id").GetString());
+        Assert.Equal("receipt-1", data.GetProperty("oldest").GetProperty("edges")[0].GetProperty("node").GetProperty("id").GetString());
+    }
+
+    [Fact]
+    public async Task Receipt_by_id_returns_the_customers_receipt()
+    {
+        var data = await ReceiptsAsync(
+            "{ receipt(id: \"receipt-2\") { __typename ... on Receipt { id customer { id } order { id } } } }");
+
+        var receipt = data.GetProperty("receipt");
+        Assert.Equal("Receipt", receipt.GetProperty("__typename").GetString());
+        Assert.Equal("receipt-2", receipt.GetProperty("id").GetString());
+        Assert.Equal("customer-1", receipt.GetProperty("customer").GetProperty("id").GetString());
+    }
+
+    [Theory]
+    [InlineData("customer-2", "receipt-1")] // belongs to another customer
+    [InlineData("customer-1", "missing")] // does not exist
+    [InlineData("customer-1", "receipt-4")] // anonymous in-store receipt: no customer to own it
+    public async Task Receipt_by_id_is_not_found_unless_the_signed_in_customer_owns_it(string customerId, string receiptId)
+    {
+        var data = await ReceiptsAsync(
+            $"{{ receipt(id: \"{receiptId}\") {{ __typename ... on NotFoundError {{ message }} }} }}",
+            customerId);
+
+        var result = data.GetProperty("receipt");
+        Assert.Equal("NotFoundError", result.GetProperty("__typename").GetString());
+        Assert.Equal($"Receipt '{receiptId}' was not found.", result.GetProperty("message").GetString());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task Queries_without_a_signed_in_customer_are_unauthorized_and_never_reach_the_repository(string? customerId)
+    {
+        var data = await ReceiptsAsync(
+            "{ receipt(id: \"receipt-1\") { __typename } receipts { __typename ... on UnauthorizedError { message } } }",
+            customerId);
+
+        Assert.Equal("UnauthorizedError", data.GetProperty("receipt").GetProperty("__typename").GetString());
+        Assert.Equal("UnauthorizedError", data.GetProperty("receipts").GetProperty("__typename").GetString());
+        Assert.Empty(_harness.Repository.IdLookups);
+        Assert.Empty(_harness.Repository.OwnerLookups);
+    }
+
+    [Fact]
+    public async Task Unexpected_repository_failures_become_an_internal_server_error()
+    {
+        _harness.Repository.FailWith(new InvalidOperationException("database is down"));
+
+        var data = await ReceiptsAsync(
+            "{ receipt(id: \"receipt-1\") { __typename } receipts { __typename ... on InternalServerError { message } } }");
+
+        Assert.Equal("InternalServerError", data.GetProperty("receipt").GetProperty("__typename").GetString());
+        Assert.Equal("InternalServerError", data.GetProperty("receipts").GetProperty("__typename").GetString());
+        // The internal reason is logged, never sent to the client.
+        Assert.DoesNotContain("database is down", data.GetRawText());
     }
 
     [Fact]
     public async Task Invalid_pagination_returns_a_coded_error_without_exception_details()
     {
         using var result = await _harness.QueryAsync(
-            """
-            {
-              _entities(representations: [{ __typename: "Customer", id: "customer-1" }]) {
-                ... on Customer { receipts(input: { pagination: { first: 1000 } }) { edges { node { id } } } }
-              }
-            }
-            """);
+            "{ receipts(input: { pagination: { first: 1000 } }) { ... on ReceiptConnection { edges { node { id } } } } }",
+            customerId: "customer-1");
 
         var error = result.RootElement.GetProperty("errors")[0];
         Assert.Equal("INVALID_PAGINATION", error.GetProperty("extensions").GetProperty("code").GetString());
@@ -385,18 +405,5 @@ public class ReceiptResolverTests : IAsyncLifetime
         Assert.Equal(
             "INVALID_PAGINATION",
             result.RootElement.GetProperty("errors")[0].GetProperty("extensions").GetProperty("code").GetString());
-    }
-
-    [Fact]
-    public async Task Abusively_deep_queries_are_rejected()
-    {
-        var deep = string.Concat(Enumerable.Repeat("customer { receipts { edges { node { ", 8))
-            + "id"
-            + string.Concat(Enumerable.Repeat(" } } } }", 8));
-
-        using var result = await _harness.QueryAsync(
-            $"{{ _entities(representations: [{{ __typename: \"Receipt\", id: \"receipt-1\" }}]) {{ ... on Receipt {{ {deep} }} }} }}");
-
-        Assert.True(result.RootElement.TryGetProperty("errors", out _));
     }
 }

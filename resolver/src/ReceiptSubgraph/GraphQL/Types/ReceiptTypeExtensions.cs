@@ -1,43 +1,9 @@
 using HotChocolate;
 using HotChocolate.Types;
-using ReceiptSubgraph.Data;
 using ReceiptSubgraph.Domain;
-using ReceiptSubgraph.GraphQL.DataLoaders;
 using ReceiptSubgraph.Paging;
 
 namespace ReceiptSubgraph.GraphQL.Types;
-
-/// <summary>Adds <c>receipts</c> to the Customer entity owned by the Customer subgraph.</summary>
-[ObjectType<Customer>]
-public static partial class CustomerNode
-{
-    /// <summary>
-    /// Receipts for the customer, newest first. Lookups for many customers are batched by the DataLoader.
-    /// </summary>
-    public static async Task<ReceiptConnection?> GetReceiptsAsync(
-        [Parent] Customer customer,
-        ReceiptResultInput? input,
-        IReceiptResultByOwnerDataLoader receiptResults,
-        CancellationToken cancellationToken)
-        => await receiptResults.LoadAsync(
-            new ReceiptResultKey(ReceiptOwnerKind.Customer, customer.Id, input),
-            cancellationToken);
-}
-
-/// <summary>Adds <c>receipts</c> to the Order entity owned by the Order subgraph.</summary>
-[ObjectType<Order>]
-public static partial class OrderNode
-{
-    /// <summary>Receipts for the order, newest first. Lookups for many orders are batched by the DataLoader.</summary>
-    public static async Task<ReceiptConnection?> GetReceiptsAsync(
-        [Parent] Order order,
-        ReceiptResultInput? input,
-        IReceiptResultByOwnerDataLoader receiptResults,
-        CancellationToken cancellationToken)
-        => await receiptResults.LoadAsync(
-            new ReceiptResultKey(ReceiptOwnerKind.Order, order.Id, input),
-            cancellationToken);
-}
 
 /// <summary>Resolvers for the Receipt fields that are not plain properties of the model.</summary>
 [ObjectType<Receipt>]

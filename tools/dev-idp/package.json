@@ -1,0 +1,8 @@
+{
+  "name": "dev-idp",
+  "private": true,
+  "description": "Local identity provider that issues test access tokens for the receipt subgraph. Development use only.",
+  "scripts": {
+    "start": "node dev-idp.js"
+  }
+}

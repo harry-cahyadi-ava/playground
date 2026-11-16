@@ -14,22 +14,46 @@ namespace ReceiptSubgraph.Tests.Authorization;
 
 public sealed class RequestAuthorizationInterceptorTests
 {
-    private const string Query = """{"query":"{ __typename }"}""";
+    private const string TypenameQuery = """{"query":"{ __typename }"}""";
+    private const string ReceiptsQuery = """{"query":"{ receipts { __typename ... on ReceiptConnection { totalCount } } }"}""";
+
+    private static AuthorizationResult SignedIn(string customerId = "customer-1")
+        => AuthorizationResult.Success(new UserContext { CustomerId = customerId });
 
     [Fact]
-    public async Task Valid_headers_execute_the_request_and_pass_tokens_and_roles_to_the_handlers()
+    public async Task Valid_header_executes_the_request_and_passes_token_and_roles_to_the_handler()
     {
-        var roles = new FakeRoleHandler(AuthorizationResult.Success);
-        var users = new FakeUserHandler(UserAuthorizationResult.Success(new UserContext()));
+        var roles = new FakeHandler(SignedIn());
 
-        await using var host = await StartAsync(roles, users);
-        var response = await host.PostAsync(role: "Bearer role-token", user: "bearer user-token");
+        await using var host = await StartAsync(roles);
+        var response = await host.PostAsync("bearer role-token");
 
         Assert.Equal(HttpStatusCode.OK, response.Status);
         Assert.Equal("Query", response.Json.RootElement.GetProperty("data").GetProperty("__typename").GetString());
         Assert.Equal("role-token", roles.Token);
         Assert.Equal(["receipts.read"], roles.RequiredRoles);
-        Assert.Equal("user-token", users.Token);
+    }
+
+    [Fact]
+    public async Task The_user_from_the_token_is_available_to_the_resolvers()
+    {
+        await using var host = await StartAsync(new FakeHandler(SignedIn("customer-1")));
+        var response = await host.PostAsync("Bearer role-token", ReceiptsQuery);
+
+        var receipts = response.Json.RootElement.GetProperty("data").GetProperty("receipts");
+        Assert.Equal("ReceiptConnection", receipts.GetProperty("__typename").GetString());
+        Assert.Equal(3, receipts.GetProperty("totalCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_valid_token_without_a_customer_is_not_allowed_to_list_receipts()
+    {
+        await using var host = await StartAsync(new FakeHandler(AuthorizationResult.Success(new UserContext())));
+        var response = await host.PostAsync("Bearer role-token", ReceiptsQuery);
+
+        Assert.Equal(
+            "UnauthorizedError",
+            response.Json.RootElement.GetProperty("data").GetProperty("receipts").GetProperty("__typename").GetString());
     }
 
     [Theory]
@@ -39,80 +63,47 @@ public sealed class RequestAuthorizationInterceptorTests
     [InlineData("Bearer ")]
     public async Task Missing_or_non_bearer_authorization_header_is_unauthenticated(string? header)
     {
-        var roles = new FakeRoleHandler(AuthorizationResult.Success);
-        var users = new FakeUserHandler(UserAuthorizationResult.Success(new UserContext()));
+        var roles = new FakeHandler(SignedIn());
 
-        await using var host = await StartAsync(roles, users);
-        var response = await host.PostAsync(role: header, user: "Bearer user-token");
+        await using var host = await StartAsync(roles);
+        var response = await host.PostAsync(header);
 
         AssertError(response, RequestAuthorizationInterceptor.UnauthenticatedCode);
         Assert.Null(roles.Token);
     }
 
     [Fact]
-    public async Task Missing_user_authorization_header_is_unauthenticated()
+    public async Task Missing_role_is_forbidden()
     {
-        var roles = new FakeRoleHandler(AuthorizationResult.Success);
-        var users = new FakeUserHandler(UserAuthorizationResult.Success(new UserContext()));
+        var roles = new FakeHandler(AuthorizationResult.Fail(AuthorizationFailure.Forbidden, "Missing role."));
 
-        await using var host = await StartAsync(roles, users);
-        var response = await host.PostAsync(role: "Bearer role-token", user: null);
-
-        AssertError(response, RequestAuthorizationInterceptor.UnauthenticatedCode);
-        Assert.Null(users.Token);
-    }
-
-    [Fact]
-    public async Task Missing_role_is_forbidden_and_the_user_header_is_not_evaluated()
-    {
-        var roles = new FakeRoleHandler(AuthorizationResult.Fail(AuthorizationFailure.Forbidden, "Missing role."));
-        var users = new FakeUserHandler(UserAuthorizationResult.Success(new UserContext()));
-
-        await using var host = await StartAsync(roles, users);
-        var response = await host.PostAsync(role: "Bearer role-token", user: "Bearer user-token");
+        await using var host = await StartAsync(roles);
+        var response = await host.PostAsync("Bearer role-token");
 
         AssertError(response, RequestAuthorizationInterceptor.ForbiddenCode, "Missing role.");
-        Assert.Null(users.Token);
     }
 
     [Fact]
-    public async Task Invalid_user_token_is_unauthenticated()
+    public async Task Invalid_token_is_unauthenticated()
     {
-        var roles = new FakeRoleHandler(AuthorizationResult.Success);
-        var users = new FakeUserHandler(UserAuthorizationResult.Fail(AuthorizationFailure.Unauthenticated, "Bad user token."));
+        var roles = new FakeHandler(AuthorizationResult.Fail(AuthorizationFailure.Unauthenticated, "Bad token."));
 
-        await using var host = await StartAsync(roles, users);
-        var response = await host.PostAsync(role: "Bearer role-token", user: "Bearer user-token");
+        await using var host = await StartAsync(roles);
+        var response = await host.PostAsync("Bearer role-token");
 
-        AssertError(response, RequestAuthorizationInterceptor.UnauthenticatedCode, "Bad user token.");
+        AssertError(response, RequestAuthorizationInterceptor.UnauthenticatedCode, "Bad token.");
     }
 
     [Fact]
     public async Task Disabled_authorization_skips_validation()
     {
-        var roles = new FakeRoleHandler(AuthorizationResult.Fail(AuthorizationFailure.Forbidden, "Should not be called."));
-        var users = new FakeUserHandler(UserAuthorizationResult.Fail(AuthorizationFailure.Forbidden, "Should not be called."));
+        var roles = new FakeHandler(AuthorizationResult.Fail(AuthorizationFailure.Forbidden, "Should not be called."));
 
-        await using var host = await StartAsync(roles, users, roleEnabled: false, userEnabled: false);
-        var response = await host.PostAsync(role: null, user: null);
-
-        Assert.Equal(HttpStatusCode.OK, response.Status);
-        Assert.Null(roles.Token);
-        Assert.Null(users.Token);
-    }
-
-    [Fact]
-    public async Task Each_flow_can_be_disabled_independently()
-    {
-        var roles = new FakeRoleHandler(AuthorizationResult.Success);
-        var users = new FakeUserHandler(UserAuthorizationResult.Success(new UserContext()));
-
-        await using var host = await StartAsync(roles, users, roleEnabled: false);
-        var response = await host.PostAsync(role: null, user: "Bearer user-token");
+        await using var host = await StartAsync(roles, enabled: false);
+        var response = await host.PostAsync(null);
 
         Assert.Equal(HttpStatusCode.OK, response.Status);
         Assert.Null(roles.Token);
-        Assert.Equal("user-token", users.Token);
     }
 
     private static void AssertError(Response response, string code, string? message = null)
@@ -127,24 +118,20 @@ public sealed class RequestAuthorizationInterceptorTests
         }
     }
 
-    private static async Task<TestHost> StartAsync(
-        FakeRoleHandler roles,
-        FakeUserHandler users,
-        bool roleEnabled = true,
-        bool userEnabled = true)
+    private static async Task<TestHost> StartAsync(FakeHandler roles, bool enabled = true)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["GraphQL:Authorization:Enabled"] = roleEnabled.ToString(),
+            ["GraphQL:Authorization:Enabled"] = enabled.ToString(),
+            ["GraphQL:Authorization:Authority"] = "https://issuer.test",
+            ["GraphQL:Authorization:Audience"] = "receipts",
             ["GraphQL:Authorization:RequiredRoles:0"] = "receipts.read",
-            ["GraphQL:UserAuthorization:Enabled"] = userEnabled.ToString(),
         });
         builder.Services.AddReceiptSubgraph(builder.Configuration);
-        // Registered after AddReceiptSubgraph so they replace the default adapters.
+        // Registered after AddReceiptSubgraph so it replaces the default adapter.
         builder.Services.AddSingleton<IAuthorizationHandler>(roles);
-        builder.Services.AddSingleton<IUserAuthorizationHandler>(users);
 
         var app = builder.Build();
         app.MapGraphQL();
@@ -156,21 +143,16 @@ public sealed class RequestAuthorizationInterceptorTests
 
     private sealed class TestHost(WebApplication app) : IAsyncDisposable
     {
-        public async Task<Response> PostAsync(string? role, string? user)
+        public async Task<Response> PostAsync(string? authorization, string query = TypenameQuery)
         {
             var request = new HttpRequestMessage(HttpMethod.Post, "/graphql")
             {
-                Content = new StringContent(Query, Encoding.UTF8, new MediaTypeHeaderValue("application/json")),
+                Content = new StringContent(query, Encoding.UTF8, new MediaTypeHeaderValue("application/json")),
             };
 
-            if (role is not null)
+            if (authorization is not null)
             {
-                request.Headers.TryAddWithoutValidation("Authorization", role);
-            }
-
-            if (user is not null)
-            {
-                request.Headers.TryAddWithoutValidation("UserAuthorization", user);
+                request.Headers.TryAddWithoutValidation("Authorization", authorization);
             }
 
             using var response = await app.GetTestClient().SendAsync(request, TestContext.Current.CancellationToken);
@@ -185,7 +167,7 @@ public sealed class RequestAuthorizationInterceptorTests
         }
     }
 
-    private sealed class FakeRoleHandler(AuthorizationResult result) : IAuthorizationHandler
+    private sealed class FakeHandler(AuthorizationResult result) : IAuthorizationHandler
     {
         public string? Token { get; private set; }
 
@@ -198,17 +180,6 @@ public sealed class RequestAuthorizationInterceptorTests
         {
             Token = token;
             RequiredRoles = requiredRoles;
-            return ValueTask.FromResult(result);
-        }
-    }
-
-    private sealed class FakeUserHandler(UserAuthorizationResult result) : IUserAuthorizationHandler
-    {
-        public string? Token { get; private set; }
-
-        public ValueTask<UserAuthorizationResult> ValidateAsync(string token, CancellationToken cancellationToken)
-        {
-            Token = token;
             return ValueTask.FromResult(result);
         }
     }

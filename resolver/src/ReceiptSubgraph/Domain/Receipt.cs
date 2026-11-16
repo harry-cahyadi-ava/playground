@@ -12,7 +12,7 @@ namespace ReceiptSubgraph.Domain;
 /// resolvers in <c>ReceiptNode</c> instead.
 /// </summary>
 [Key("id")]
-public sealed record Receipt
+public sealed record Receipt : IReceiptResponse
 {
     /// <summary>The unique id of the receipt (called "transaction id" within the Digital Receipt Service).</summary>
     [ID]

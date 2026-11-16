@@ -76,7 +76,7 @@ public sealed record ReceiptResultInput(ReceiptFilter? Filter = null, PageReques
 /// <param name="Edges">The receipts in the requested page, each with its own cursor. Ordered by creation date, newest first.</param>
 /// <param name="PageInfo">The details about the page of receipts returned.</param>
 /// <param name="TotalCount">The total number of receipts matching the filter, across all pages.</param>
-public sealed record ReceiptConnection(IReadOnlyList<ReceiptEdge> Edges, PageInfo PageInfo, int TotalCount)
+public sealed record ReceiptConnection(IReadOnlyList<ReceiptEdge> Edges, PageInfo PageInfo, int TotalCount) : IReceiptsResponse
 {
     public static ReceiptConnection From(Page<Receipt> page)
         => new(page.ToEdges(static (cursor, receipt) => new ReceiptEdge(cursor, receipt)), page.PageInfo, page.TotalCount);

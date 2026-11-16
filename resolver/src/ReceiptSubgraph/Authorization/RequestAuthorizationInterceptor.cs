@@ -9,13 +9,12 @@ namespace ReceiptSubgraph.Authorization;
 
 /// <summary>
 /// Authorises every GraphQL HTTP request before it executes: the <c>Authorization</c> header is validated for the
-/// required roles, then the <c>UserAuthorization</c> header is validated and the user's properties are stored in the
-/// request's global state under <see cref="UserContext.GlobalStateKey"/>.
+/// required roles and the user's properties are stored in the request's global state under
+/// <see cref="UserContext.GlobalStateKey"/>.
 /// </summary>
 public sealed class RequestAuthorizationInterceptor : DefaultHttpRequestInterceptor
 {
     public const string AuthorizationHeader = "Authorization";
-    public const string UserAuthorizationHeader = "UserAuthorization";
     public const string UnauthenticatedCode = "UNAUTHENTICATED";
     public const string ForbiddenCode = "FORBIDDEN";
 
@@ -29,35 +28,24 @@ public sealed class RequestAuthorizationInterceptor : DefaultHttpRequestIntercep
     {
         // Application services come from the request scope because interceptors are built from the schema services.
         var services = context.RequestServices;
-        var roleOptions = services.GetRequiredService<IOptions<AuthorizationOptions>>().Value;
-        var userOptions = services.GetRequiredService<IOptions<UserAuthorizationOptions>>().Value;
+        var options = services.GetRequiredService<IOptions<AuthorizationOptions>>().Value;
 
-        if (roleOptions.Enabled)
+        if (options.Enabled)
         {
-            var roleToken = GetBearerToken(context, AuthorizationHeader);
-            var roleResult = await services
+            var token = GetBearerToken(context, AuthorizationHeader);
+            var result = await services
                 .GetRequiredService<IAuthorizationHandler>()
-                .ValidateAsync(roleToken, roleOptions.RequiredRoles, cancellationToken);
+                .ValidateAsync(token, options.RequiredRoles, cancellationToken);
 
-            if (!roleResult.Succeeded)
+            if (!result.Succeeded)
             {
-                throw Reject(roleResult.Failure, roleResult.Message);
-            }
-        }
-
-        if (userOptions.Enabled)
-        {
-            var userToken = GetBearerToken(context, UserAuthorizationHeader);
-            var userResult = await services
-                .GetRequiredService<IUserAuthorizationHandler>()
-                .ValidateAsync(userToken, cancellationToken);
-
-            if (!userResult.Succeeded || userResult.User is null)
-            {
-                throw Reject(userResult.Failure, userResult.Message);
+                throw Reject(result.Failure, result.Message);
             }
 
-            requestBuilder.SetGlobalState(UserContext.GlobalStateKey, userResult.User);
+            if (result.User is not null)
+            {
+                requestBuilder.SetGlobalState(UserContext.GlobalStateKey, result.User);
+            }
         }
 
         await base.OnCreateAsync(context, requestExecutor, requestBuilder, cancellationToken);
