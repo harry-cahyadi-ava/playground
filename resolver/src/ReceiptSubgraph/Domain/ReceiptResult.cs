@@ -9,7 +9,7 @@ namespace ReceiptSubgraph.Domain;
 /// against the intersection of the inputs.
 /// </summary>
 /// <remarks>
-/// Instances are used as part of a DataLoader key, so equality is value based (including the id list).
+/// Equality is value based (including the id list).
 /// </remarks>
 [GraphQLName("ReceiptResultFilterInput")]
 public sealed record ReceiptFilter : IEquatable<ReceiptFilter>

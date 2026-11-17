@@ -1,7 +1,4 @@
-using ReceiptSubgraph.Data;
 using ReceiptSubgraph.Domain;
-using ReceiptSubgraph.GraphQL.DataLoaders;
-using ReceiptSubgraph.Paging;
 
 namespace ReceiptSubgraph.Tests.Domain;
 
@@ -29,21 +26,5 @@ public class ReceiptFilterEqualityTests
     public void A_filter_with_order_ids_differs_from_one_without()
     {
         Assert.NotEqual(new ReceiptFilter { OrderIds = ["o1"] }, new ReceiptFilter());
-    }
-
-    [Fact]
-    public void Receipt_result_keys_with_equal_inputs_are_equal_so_they_share_a_DataLoader_cache_entry()
-    {
-        var first = new ReceiptResultKey(
-            ReceiptOwnerKind.Customer,
-            "c1",
-            new ReceiptResultInput(new ReceiptFilter { OrderIds = ["o1"] }, new PageRequest(First: 5)));
-        var second = new ReceiptResultKey(
-            ReceiptOwnerKind.Customer,
-            "c1",
-            new ReceiptResultInput(new ReceiptFilter { OrderIds = ["o1"] }, new PageRequest(First: 5)));
-
-        Assert.Equal(first, second);
-        Assert.Equal(first.GetHashCode(), second.GetHashCode());
     }
 }

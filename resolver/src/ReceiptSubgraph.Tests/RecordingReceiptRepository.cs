@@ -5,18 +5,18 @@ using ReceiptSubgraph.Paging;
 namespace ReceiptSubgraph.Tests;
 
 /// <summary>
-/// Wraps a real repository and records how often it is called, so tests can assert that DataLoaders
-/// really collapse many lookups into few round trips.
+/// Wraps a real repository and records how often it is called, so tests can assert which customer was
+/// queried and that DataLoaders really collapse many lookups into few round trips.
 /// </summary>
 internal sealed class RecordingReceiptRepository(IReceiptRepository inner) : IReceiptRepository
 {
     private readonly List<IReadOnlyList<string>> _idLookups = [];
-    private readonly List<(ReceiptOwnerKind Kind, string[] OwnerIds, ReceiptResultInput? Input)> _ownerLookups = [];
+    private readonly List<(string CustomerId, ReceiptResultInput? Input)> _customerLookups = [];
     private Exception? _failure;
 
     public IReadOnlyList<IReadOnlyList<string>> IdLookups => _idLookups;
 
-    public IReadOnlyList<(ReceiptOwnerKind Kind, string[] OwnerIds, ReceiptResultInput? Input)> OwnerLookups => _ownerLookups;
+    public IReadOnlyList<(string CustomerId, ReceiptResultInput? Input)> CustomerLookups => _customerLookups;
 
     /// <summary>Makes every following lookup throw, to simulate the backing store being unavailable.</summary>
     public void FailWith(Exception failure) => _failure = failure;
@@ -39,9 +39,8 @@ internal sealed class RecordingReceiptRepository(IReceiptRepository inner) : IRe
         return inner.GetByIdsAsync(receiptIds, cancellationToken);
     }
 
-    public ValueTask<IReadOnlyDictionary<string, Page<Receipt>>> GetByOwnersAsync(
-        ReceiptOwnerKind ownerKind,
-        IReadOnlyList<string> ownerIds,
+    public ValueTask<Page<Receipt>> GetByCustomerAsync(
+        string customerId,
         ReceiptResultInput? input,
         CancellationToken cancellationToken)
     {
@@ -50,11 +49,11 @@ internal sealed class RecordingReceiptRepository(IReceiptRepository inner) : IRe
             throw _failure;
         }
 
-        lock (_ownerLookups)
+        lock (_customerLookups)
         {
-            _ownerLookups.Add((ownerKind, ownerIds.ToArray(), input));
+            _customerLookups.Add((customerId, input));
         }
 
-        return inner.GetByOwnersAsync(ownerKind, ownerIds, input, cancellationToken);
+        return inner.GetByCustomerAsync(customerId, input, cancellationToken);
     }
 }

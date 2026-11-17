@@ -3,17 +3,9 @@ using ReceiptSubgraph.Paging;
 
 namespace ReceiptSubgraph.Data;
 
-/// <summary>The kind of entity that receipts can be listed for.</summary>
-public enum ReceiptOwnerKind
-{
-    Customer,
-    Order,
-}
-
 /// <summary>
-/// Data access contract for receipts. Every method is batch oriented so that a request which touches many
-/// customers, orders or receipts costs a fixed number of round trips to the backing store.
-/// Implementations replace the in-memory sample used for local development (e.g. a client for the Digital Receipt Service).
+/// Data access contract for receipts. Implementations replace the in-memory sample used for local development
+/// (e.g. a client for the Digital Receipt Service).
 /// </summary>
 public interface IReceiptRepository
 {
@@ -23,12 +15,11 @@ public interface IReceiptRepository
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Loads one page of receipts, newest first, for each of the given owners (customers or orders).
-    /// The same filter and paging are applied to every owner. Owners without receipts get an empty page.
+    /// Loads one page of the customer's receipts, newest first, narrowed by the optional filter and paging in
+    /// <paramref name="input"/>. A customer without matching receipts gets an empty page.
     /// </summary>
-    ValueTask<IReadOnlyDictionary<string, Page<Receipt>>> GetByOwnersAsync(
-        ReceiptOwnerKind ownerKind,
-        IReadOnlyList<string> ownerIds,
+    ValueTask<Page<Receipt>> GetByCustomerAsync(
+        string customerId,
         ReceiptResultInput? input,
         CancellationToken cancellationToken);
 }

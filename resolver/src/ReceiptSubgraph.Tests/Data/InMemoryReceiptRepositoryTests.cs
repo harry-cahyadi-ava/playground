@@ -22,8 +22,8 @@ public class InMemoryReceiptRepositoryTests
 
     private async Task<string[]> CustomerReceiptIdsAsync(ReceiptResultInput? input, string customerId = "customer-1")
     {
-        var result = await _repository.GetByOwnersAsync(ReceiptOwnerKind.Customer, [customerId], input, Ct);
-        return result[customerId].Items.Select(r => r.Id).ToArray();
+        var page = await _repository.GetByCustomerAsync(customerId, input, Ct);
+        return page.Items.Select(r => r.Id).ToArray();
     }
 
     [Fact]
@@ -35,37 +35,32 @@ public class InMemoryReceiptRepositoryTests
     }
 
     [Fact]
-    public async Task Receipts_for_an_owner_are_newest_first()
+    public async Task Receipts_for_a_customer_are_newest_first()
     {
         Assert.Equal(["r3", "r2", "r1"], await CustomerReceiptIdsAsync(null));
     }
 
     [Fact]
-    public async Task Receipts_can_be_listed_per_order()
+    public async Task Receipts_are_only_returned_for_the_requested_customer()
     {
-        var result = await _repository.GetByOwnersAsync(ReceiptOwnerKind.Order, ["o1"], null, Ct);
-
-        Assert.Equal(["r3", "r1"], result["o1"].Items.Select(r => r.Id));
+        Assert.Equal(["r4"], await CustomerReceiptIdsAsync(null, "customer-2"));
     }
 
     [Fact]
-    public async Task Many_owners_are_served_in_one_call_and_unknown_owners_get_an_empty_page()
+    public async Task An_unknown_customer_gets_an_empty_page()
     {
-        var result = await _repository.GetByOwnersAsync(
-            ReceiptOwnerKind.Customer, ["customer-1", "customer-2", "nobody"], null, Ct);
+        var page = await _repository.GetByCustomerAsync("nobody", null, Ct);
 
-        Assert.Equal(3, result.Count);
-        Assert.Equal(3, result["customer-1"].Items.Count);
-        Assert.Equal(["r4"], result["customer-2"].Items.Select(r => r.Id));
-        Assert.Empty(result["nobody"].Items);
+        Assert.Empty(page.Items);
+        Assert.Equal(0, page.TotalCount);
     }
 
     [Fact]
     public async Task Receipts_without_a_customer_are_not_listed_for_anyone()
     {
-        var result = await _repository.GetByOwnersAsync(ReceiptOwnerKind.Customer, ["customer-1", "customer-2"], null, Ct);
+        var all = (await CustomerReceiptIdsAsync(null)).Concat(await CustomerReceiptIdsAsync(null, "customer-2"));
 
-        Assert.DoesNotContain(result.Values.SelectMany(p => p.Items), r => r.Id == "anon");
+        Assert.DoesNotContain("anon", all);
     }
 
     [Fact]
@@ -135,8 +130,7 @@ public class InMemoryReceiptRepositoryTests
     {
         var input = new ReceiptResultInput(new ReceiptFilter { StoreId = "s1" }, new PageRequest(First: 1));
 
-        var result = await _repository.GetByOwnersAsync(ReceiptOwnerKind.Customer, ["customer-1"], input, Ct);
-        var page = result["customer-1"];
+        var page = await _repository.GetByCustomerAsync("customer-1", input, Ct);
 
         Assert.Equal(["r2"], page.Items.Select(r => r.Id));
         Assert.True(page.PageInfo.HasNextPage);
@@ -151,9 +145,9 @@ public class InMemoryReceiptRepositoryTests
             [TestReceipts.Create("b", sameTime), TestReceipts.Create("a", sameTime)],
             new PaginationOptions());
 
-        var result = await repository.GetByOwnersAsync(ReceiptOwnerKind.Customer, ["customer-1"], null, Ct);
+        var page = await repository.GetByCustomerAsync("customer-1", null, Ct);
 
-        Assert.Equal(["a", "b"], result["customer-1"].Items.Select(r => r.Id));
+        Assert.Equal(["a", "b"], page.Items.Select(r => r.Id));
     }
 
     private static ReceiptResultInput Input(ReceiptFilter filter) => new(filter);

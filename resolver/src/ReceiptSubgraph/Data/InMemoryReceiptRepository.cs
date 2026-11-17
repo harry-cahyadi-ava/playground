@@ -14,7 +14,6 @@ public sealed class InMemoryReceiptRepository : IReceiptRepository
     private readonly PaginationOptions _paginationOptions;
     private readonly FrozenDictionary<string, Receipt> _byId;
     private readonly FrozenDictionary<string, Receipt[]> _byCustomerId;
-    private readonly FrozenDictionary<string, Receipt[]> _byOrderId;
 
     public InMemoryReceiptRepository(IEnumerable<Receipt> receipts, PaginationOptions paginationOptions)
     {
@@ -27,8 +26,12 @@ public sealed class InMemoryReceiptRepository : IReceiptRepository
             .ToArray();
 
         _byId = ordered.ToFrozenDictionary(r => r.Id);
-        _byCustomerId = GroupBy(ordered, r => r.CustomerId);
-        _byOrderId = GroupBy(ordered, r => r.OrderId);
+
+        // Receipts without a customer (anonymous in-store purchases) are not listed for anyone.
+        _byCustomerId = ordered
+            .Where(r => r.CustomerId is not null)
+            .GroupBy(r => r.CustomerId!)
+            .ToFrozenDictionary(g => g.Key, g => g.ToArray());
     }
 
     public ValueTask<IReadOnlyDictionary<string, Receipt>> GetByIdsAsync(
@@ -48,39 +51,28 @@ public sealed class InMemoryReceiptRepository : IReceiptRepository
         return ValueTask.FromResult<IReadOnlyDictionary<string, Receipt>>(result);
     }
 
-    public ValueTask<IReadOnlyDictionary<string, Page<Receipt>>> GetByOwnersAsync(
-        ReceiptOwnerKind ownerKind,
-        IReadOnlyList<string> ownerIds,
+    public ValueTask<Page<Receipt>> GetByCustomerAsync(
+        string customerId,
         ReceiptResultInput? input,
         CancellationToken cancellationToken)
     {
-        var index = ownerKind == ReceiptOwnerKind.Customer ? _byCustomerId : _byOrderId;
         var filter = input?.Filter;
 
-        // Build the order id lookup once per call instead of once per owner or per receipt.
-        var orderIds = filter?.OrderIds is { Count: > 0 } ids ? ids.ToHashSet(StringComparer.Ordinal) : null;
-        var emptyOrderFilter = filter?.OrderIds is { Count: 0 };
-
-        var result = new Dictionary<string, Page<Receipt>>(ownerIds.Count);
-
-        foreach (var ownerId in ownerIds)
+        // An empty order id list means "no order matches", which is different from not filtering by order.
+        if (!_byCustomerId.TryGetValue(customerId, out var candidates) || filter?.OrderIds is { Count: 0 })
         {
-            if (!index.TryGetValue(ownerId, out var candidates) || emptyOrderFilter)
-            {
-                result[ownerId] = Page<Receipt>.Empty;
-                continue;
-            }
-
-            // Skip the copy entirely when there is nothing to filter on.
-            var matching = filter is null ? candidates : Filter(candidates, filter, orderIds);
-            result[ownerId] = Paginator.Slice(matching, input?.Pagination, _paginationOptions);
+            return ValueTask.FromResult(Page<Receipt>.Empty);
         }
 
-        return ValueTask.FromResult<IReadOnlyDictionary<string, Page<Receipt>>>(result);
+        // Skip the copy entirely when there is nothing to filter on.
+        var matching = filter is null ? candidates : Filter(candidates, filter);
+
+        return ValueTask.FromResult(Paginator.Slice(matching, input?.Pagination, _paginationOptions));
     }
 
-    private static Receipt[] Filter(Receipt[] candidates, ReceiptFilter filter, HashSet<string>? orderIds)
+    private static Receipt[] Filter(Receipt[] candidates, ReceiptFilter filter)
     {
+        var orderIds = filter.OrderIds is { Count: > 0 } ids ? ids.ToHashSet(StringComparer.Ordinal) : null;
         var matching = new List<Receipt>(candidates.Length);
 
         foreach (var receipt in candidates)
@@ -102,10 +94,4 @@ public sealed class InMemoryReceiptRepository : IReceiptRepository
             && (filter.StoreSalesChannel is null || receipt.StoreSalesChannel == filter.StoreSalesChannel)
             && (filter.DateFrom is null || receipt.CreatedAt >= filter.DateFrom)
             && (filter.DateTo is null || receipt.CreatedAt <= filter.DateTo);
-
-    private static FrozenDictionary<string, Receipt[]> GroupBy(Receipt[] ordered, Func<Receipt, string?> key)
-        => ordered
-            .Where(r => key(r) is not null)
-            .GroupBy(r => key(r)!)
-            .ToFrozenDictionary(g => g.Key, g => g.ToArray());
 }

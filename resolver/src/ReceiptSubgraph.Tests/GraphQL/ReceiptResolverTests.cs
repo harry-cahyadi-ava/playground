@@ -306,13 +306,12 @@ public class ReceiptResolverTests : IAsyncLifetime
     {
         await ReceiptsAsync("{ receipts { __typename } }", customerId: "customer-2");
 
-        var lookup = Assert.Single(_harness.Repository.OwnerLookups);
-        Assert.Equal(ReceiptOwnerKind.Customer, lookup.Kind);
-        Assert.Equal(["customer-2"], lookup.OwnerIds);
+        var lookup = Assert.Single(_harness.Repository.CustomerLookups);
+        Assert.Equal("customer-2", lookup.CustomerId);
     }
 
     [Fact]
-    public async Task Same_field_with_different_arguments_is_not_served_from_the_wrong_cache_entry()
+    public async Task Aliases_with_different_arguments_are_resolved_independently()
     {
         var data = await ReceiptsAsync(
             """
@@ -365,7 +364,7 @@ public class ReceiptResolverTests : IAsyncLifetime
         Assert.Equal("UnauthorizedError", data.GetProperty("receipt").GetProperty("__typename").GetString());
         Assert.Equal("UnauthorizedError", data.GetProperty("receipts").GetProperty("__typename").GetString());
         Assert.Empty(_harness.Repository.IdLookups);
-        Assert.Empty(_harness.Repository.OwnerLookups);
+        Assert.Empty(_harness.Repository.CustomerLookups);
     }
 
     [Fact]

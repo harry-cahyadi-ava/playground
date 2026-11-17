@@ -52,7 +52,7 @@ public static partial class ReceiptQueries
     public static async Task<IReceiptsResponse> GetReceiptsAsync(
         ReceiptResultInput? input,
         IResolverContext context,
-        IReceiptResultByOwnerDataLoader receiptResults,
+        IReceiptRepository repository,
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
@@ -63,11 +63,9 @@ public static partial class ReceiptQueries
 
         try
         {
-            // The loader returns an empty connection for customers without receipts, so null is only a fallback.
-            return await receiptResults.LoadAsync(
-                    new ReceiptResultKey(ReceiptOwnerKind.Customer, customerId, input),
-                    cancellationToken)
-                ?? ReceiptConnection.From(Page<Receipt>.Empty);
+            var page = await repository.GetByCustomerAsync(customerId, input, cancellationToken);
+
+            return ReceiptConnection.From(page);
         }
         // Invalid paging arguments are the client's mistake and are reported by PaginationErrorFilter.
         catch (Exception exception) when (exception is not (OperationCanceledException or InvalidPaginationException))
