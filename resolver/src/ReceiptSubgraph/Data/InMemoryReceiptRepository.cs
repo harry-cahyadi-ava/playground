@@ -61,7 +61,7 @@ public sealed class InMemoryReceiptRepository : IReceiptRepository
         // An empty order id list means "no order matches", which is different from not filtering by order.
         if (!_byCustomerId.TryGetValue(customerId, out var candidates) || filter?.OrderIds is { Count: 0 })
         {
-            return ValueTask.FromResult(Page<Receipt>.Empty);
+            return ValueTask.FromResult(Page.Empty<Receipt>());
         }
 
         // Skip the copy entirely when there is nothing to filter on.

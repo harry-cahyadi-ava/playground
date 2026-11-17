@@ -13,8 +13,6 @@ public sealed class InvalidPaginationException(string message) : Exception(messa
 /// <param name="Offset">The position of the first item of the page within the full result set.</param>
 public sealed record Page<T>(IReadOnlyList<T> Items, PageInfo PageInfo, int TotalCount, int Offset)
 {
-    public static Page<T> Empty { get; } = new([], new PageInfo(false, false, null, null), 0, 0);
-
     /// <summary>Wraps every item in an edge that carries the cursor of that item.</summary>
     public IReadOnlyList<TEdge> ToEdges<TEdge>(Func<string, T, TEdge> createEdge)
     {
@@ -30,6 +28,18 @@ public sealed record Page<T>(IReadOnlyList<T> Items, PageInfo PageInfo, int Tota
         }
 
         return edges;
+    }
+}
+
+/// <summary>Factory for <see cref="Page{T}"/>, kept non-generic so callers don't have to spell out the type twice.</summary>
+public static class Page
+{
+    /// <summary>A shared page with no items, for results that matched nothing.</summary>
+    public static Page<T> Empty<T>() => EmptyPage<T>.Instance;
+
+    private static class EmptyPage<T>
+    {
+        public static readonly Page<T> Instance = new([], new PageInfo(false, false, null, null), 0, 0);
     }
 }
 
