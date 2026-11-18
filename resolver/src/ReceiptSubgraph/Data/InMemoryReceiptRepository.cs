@@ -40,6 +40,8 @@ public sealed class InMemoryReceiptRepository : IReceiptRepository
     {
         var result = new Dictionary<string, Receipt>(receiptIds.Count);
 
+        // A database-backed repository should fetch all ids in one query (WHERE Id IN ...) and map only the rows
+        // that come back; ids without a row stay out of the dictionary.
         foreach (var id in receiptIds)
         {
             if (_byId.TryGetValue(id, out var receipt))
@@ -67,6 +69,8 @@ public sealed class InMemoryReceiptRepository : IReceiptRepository
         // Skip the copy entirely when there is nothing to filter on.
         var matching = filter is null ? candidates : Filter(candidates, filter);
 
+        // A database-backed repository should filter, order and page in the query, and only then map the fetched
+        // rows to Receipt, so the mapping cost is bounded by the page size instead of the customer's full history.
         return ValueTask.FromResult(Paginator.Slice(matching, input?.Pagination, _paginationOptions));
     }
 

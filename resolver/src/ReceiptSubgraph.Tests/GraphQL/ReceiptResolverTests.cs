@@ -337,6 +337,45 @@ public class ReceiptResolverTests : IAsyncLifetime
         Assert.Equal("customer-1", receipt.GetProperty("customer").GetProperty("id").GetString());
     }
 
+    [Fact]
+    public async Task Receipts_requested_by_id_in_one_query_are_loaded_with_a_single_repository_call()
+    {
+        var data = await ReceiptsAsync(
+            """
+            {
+              first: receipt(id: "receipt-1") { ... on Receipt { id } }
+              second: receipt(id: "receipt-2") { ... on Receipt { id } }
+              again: receipt(id: "receipt-1") { ... on Receipt { id } }
+            }
+            """);
+
+        Assert.Equal("receipt-1", data.GetProperty("first").GetProperty("id").GetString());
+        Assert.Equal("receipt-2", data.GetProperty("second").GetProperty("id").GetString());
+        Assert.Equal("receipt-1", data.GetProperty("again").GetProperty("id").GetString());
+
+        // One batch, and the repeated id is only asked for once.
+        var lookup = Assert.Single(_harness.Repository.IdLookups);
+        Assert.Equal(["receipt-1", "receipt-2"], lookup.Order());
+    }
+
+    [Fact]
+    public async Task Receipt_and_receipts_in_one_query_use_the_matching_repository_method_once_each()
+    {
+        await ReceiptsAsync(
+            """
+            {
+              receipt(id: "receipt-1") { __typename }
+              receipts(input: { filter: { storeId: "store-1" } }) { __typename }
+            }
+            """);
+
+        Assert.Equal(["receipt-1"], Assert.Single(_harness.Repository.IdLookups));
+
+        var listing = Assert.Single(_harness.Repository.CustomerLookups);
+        Assert.Equal("customer-1", listing.CustomerId);
+        Assert.Equal("store-1", listing.Input?.Filter?.StoreId);
+    }
+
     [Theory]
     [InlineData("customer-2", "receipt-1")] // belongs to another customer
     [InlineData("customer-1", "missing")] // does not exist
