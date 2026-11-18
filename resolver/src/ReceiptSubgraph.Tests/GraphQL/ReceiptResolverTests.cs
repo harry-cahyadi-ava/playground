@@ -22,9 +22,13 @@ public class ReceiptResolverTests : IAsyncLifetime
 
     private const string EntitiesQuery = "query($reps: [_Any!]!) { _entities(representations: $reps) { %SELECTION% } }";
 
+    private Task<JsonDocument> EntitiesResponseAsync(string? customerId, string selection, params (string Type, string Id)[] representations)
+        => _harness.QueryAsync(EntitiesQuery.Replace("%SELECTION%", selection), Reps(representations), customerId);
+
+    // Entity references are resolved as the customer that owns the sample receipts.
     private async Task<JsonElement> EntitiesAsync(string selection, params (string Type, string Id)[] representations)
     {
-        var result = await _harness.QueryAsync(EntitiesQuery.Replace("%SELECTION%", selection), Reps(representations));
+        var result = await EntitiesResponseAsync("customer-1", selection, representations);
         Assert.False(result.RootElement.TryGetProperty("errors", out var errors), errors.ToString());
         return result.RootElement.GetProperty("data").GetProperty("_entities");
     }
@@ -46,22 +50,65 @@ public class ReceiptResolverTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Unknown_receipt_reference_resolves_to_null()
+    public async Task Receipt_references_that_are_missing_or_not_owned_resolve_to_null_with_an_identical_not_found_error()
     {
-        var entities = await EntitiesAsync("... on Receipt { id }", ("Receipt", "missing"));
+        // receipt-4 is anonymous, so no customer owns it; receipt-1 is only resolved when it is the signed-in customer's.
+        var result = await EntitiesResponseAsync(
+            "customer-1",
+            "... on Receipt { id }",
+            ("Receipt", "receipt-1"), ("Receipt", "missing"), ("Receipt", "receipt-4"));
 
-        Assert.Equal(JsonValueKind.Null, entities[0].ValueKind);
+        var root = result.RootElement;
+        var entities = root.GetProperty("data").GetProperty("_entities");
+        Assert.Equal("receipt-1", entities[0].GetProperty("id").GetString());
+        Assert.Equal(JsonValueKind.Null, entities[1].ValueKind);
+        Assert.Equal(JsonValueKind.Null, entities[2].ValueKind);
+
+        var errors = root.GetProperty("errors").EnumerateArray().ToList();
+        Assert.Equal(2, errors.Count);
+        AssertNotFound(errors[0], "missing");
+        AssertNotFound(errors[1], "receipt-4");
+    }
+
+    [Fact]
+    public async Task A_receipt_reference_owned_by_another_customer_is_reported_like_a_missing_one()
+    {
+        var result = await EntitiesResponseAsync("customer-2", "... on Receipt { id }", ("Receipt", "receipt-1"));
+
+        var root = result.RootElement;
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("data").GetProperty("_entities")[0].ValueKind);
+        AssertNotFound(Assert.Single(root.GetProperty("errors").EnumerateArray()), "receipt-1");
+    }
+
+    [Fact]
+    public async Task Receipt_references_without_a_signed_in_customer_are_unauthenticated_and_never_reach_the_repository()
+    {
+        var result = await EntitiesResponseAsync(null, "... on Receipt { id }", ("Receipt", "receipt-1"));
+
+        var error = result.RootElement.GetProperty("errors")[0];
+        Assert.Equal("UNAUTHENTICATED", error.GetProperty("extensions").GetProperty("code").GetString());
+        Assert.Empty(_harness.Repository.IdLookups);
+    }
+
+    // The path stops at the _entities field; the receipt is identified by the message.
+    private static void AssertNotFound(JsonElement error, string receiptId)
+    {
+        Assert.Equal($"Receipt '{receiptId}' was not found.", error.GetProperty("message").GetString());
+        Assert.Equal("NOT_FOUND", error.GetProperty("extensions").GetProperty("code").GetString());
+        Assert.Equal(["_entities"], error.GetProperty("path").EnumerateArray().Select(p => p.GetString()));
     }
 
     [Fact]
     public async Task Many_receipt_references_are_loaded_with_a_single_repository_call()
     {
-        await EntitiesAsync(
+        await EntitiesResponseAsync(
+            "customer-1",
             "... on Receipt { id }",
             ("Receipt", "receipt-1"), ("Receipt", "receipt-2"), ("Receipt", "receipt-3"), ("Receipt", "missing"));
 
         var lookup = Assert.Single(_harness.Repository.IdLookups);
-        Assert.Equal(["missing", "receipt-1", "receipt-2", "receipt-3"], lookup.Order());
+        Assert.Equal("customer-1", lookup.CustomerId);
+        Assert.Equal(["missing", "receipt-1", "receipt-2", "receipt-3"], lookup.ReceiptIds.Order());
     }
 
     [Fact]
@@ -77,15 +124,19 @@ public class ReceiptResolverTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Anonymous_in_store_receipt_has_no_customer_or_order()
+    public async Task Receipt_without_an_order_has_no_order_reference()
     {
-        var entities = await EntitiesAsync(
-            "... on Receipt { store { id } customer { id } order { id } }",
-            ("Receipt", "receipt-4"));
+        await using var harness = await SubgraphHarness.CreateAsync([TestReceipts.Create("r1", orderId: null, storeId: "store-9")]);
 
-        Assert.Equal("store-9001", entities[0].GetProperty("store").GetProperty("id").GetString());
-        Assert.Equal(JsonValueKind.Null, entities[0].GetProperty("customer").ValueKind);
-        Assert.Equal(JsonValueKind.Null, entities[0].GetProperty("order").ValueKind);
+        var result = await harness.QueryAsync(
+            EntitiesQuery.Replace("%SELECTION%", "... on Receipt { store { id } customer { id } order { id } }"),
+            Reps(("Receipt", "r1")),
+            customerId: "customer-1");
+
+        var receipt = result.RootElement.GetProperty("data").GetProperty("_entities")[0];
+        Assert.Equal("store-9", receipt.GetProperty("store").GetProperty("id").GetString());
+        Assert.Equal("customer-1", receipt.GetProperty("customer").GetProperty("id").GetString());
+        Assert.Equal(JsonValueKind.Null, receipt.GetProperty("order").ValueKind);
     }
 
     [Fact]
@@ -355,7 +406,8 @@ public class ReceiptResolverTests : IAsyncLifetime
 
         // One batch, and the repeated id is only asked for once.
         var lookup = Assert.Single(_harness.Repository.IdLookups);
-        Assert.Equal(["receipt-1", "receipt-2"], lookup.Order());
+        Assert.Equal("customer-1", lookup.CustomerId);
+        Assert.Equal(["receipt-1", "receipt-2"], lookup.ReceiptIds.Order());
     }
 
     [Fact]
@@ -369,7 +421,7 @@ public class ReceiptResolverTests : IAsyncLifetime
             }
             """);
 
-        Assert.Equal(["receipt-1"], Assert.Single(_harness.Repository.IdLookups));
+        Assert.Equal(["receipt-1"], Assert.Single(_harness.Repository.IdLookups).ReceiptIds);
 
         var listing = Assert.Single(_harness.Repository.CustomerLookups);
         Assert.Equal("customer-1", listing.CustomerId);
@@ -438,7 +490,8 @@ public class ReceiptResolverTests : IAsyncLifetime
     {
         var result = await _harness.QueryAsync(
             "query($reps: [_Any!]!) { _entities(representations: $reps) { ... on Receipt { items(pagination: { after: \"nope\" }) { edges { node { __typename } } } } } }",
-            Reps(("Receipt", "receipt-1")));
+            Reps(("Receipt", "receipt-1")),
+            customerId: "customer-1");
 
         Assert.Equal(
             "INVALID_PAGINATION",

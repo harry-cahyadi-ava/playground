@@ -35,16 +35,17 @@ public sealed class InMemoryReceiptRepository : IReceiptRepository
     }
 
     public ValueTask<IReadOnlyDictionary<string, Receipt>> GetByIdsAsync(
+        string customerId,
         IReadOnlyList<string> receiptIds,
         CancellationToken cancellationToken)
     {
         var result = new Dictionary<string, Receipt>(receiptIds.Count);
 
-        // A database-backed repository should fetch all ids in one query (WHERE Id IN ...) and map only the rows
-        // that come back; ids without a row stay out of the dictionary.
+        // A database-backed repository should fetch all ids in one query (WHERE CustomerId = ... AND Id IN ...)
+        // and map only the rows that come back; ids without a row stay out of the dictionary.
         foreach (var id in receiptIds)
         {
-            if (_byId.TryGetValue(id, out var receipt))
+            if (_byId.TryGetValue(id, out var receipt) && receipt.CustomerId == customerId)
             {
                 result[id] = receipt;
             }

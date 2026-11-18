@@ -21,10 +21,12 @@ public sealed class ReceiptRepository : IReceiptRepository
     }
 
     public ValueTask<IReadOnlyDictionary<string, Receipt>> GetByIdsAsync(
+        string customerId,
         IReadOnlyList<string> receiptIds,
         CancellationToken cancellationToken)
     {
-        // TODO: Fetch all ids in a single query (WHERE Id IN (...)), not one query per id.
+        // TODO: Fetch all ids in a single query (WHERE CustomerId = @customerId AND Id IN (...)), not one query per id.
+        // Receipts owned by another customer (or by no customer) must not be returned or mapped.
         // TODO: Load child data (items, payments, etc.) with batched queries keyed by the fetched receipt ids.
         // TODO: Map only the returned rows to Receipt.
         // TODO: Return a dictionary keyed by receipt id. Ids without a row must be absent from the dictionary.

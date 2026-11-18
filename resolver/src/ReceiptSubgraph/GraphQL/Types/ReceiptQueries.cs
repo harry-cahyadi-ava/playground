@@ -28,18 +28,18 @@ public static partial class ReceiptQueries
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
-        if (GetCustomerId(context) is not { } customerId)
+        if (context.GetCustomerId() is not { } customerId)
         {
             return new UnauthorizedError(UnauthorizedMessage);
         }
 
         try
         {
-            var receipt = await receiptById.LoadAsync(id, cancellationToken);
+            var receipt = await receiptById.LoadAsync(new ReceiptByIdKey(customerId, id), cancellationToken);
 
-            return receipt is not null && receipt.CustomerId == customerId
+            return receipt is not null
                 ? receipt
-                : new NotFoundError($"Receipt '{id}' was not found.");
+                : NotFoundError.ForReceipt(id);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -56,7 +56,7 @@ public static partial class ReceiptQueries
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
-        if (GetCustomerId(context) is not { } customerId)
+        if (context.GetCustomerId() is not { } customerId)
         {
             return new UnauthorizedError(UnauthorizedMessage);
         }
@@ -74,9 +74,4 @@ public static partial class ReceiptQueries
             return new InternalServerError(InternalErrorMessage);
         }
     }
-
-    private static string? GetCustomerId(IResolverContext context)
-        => context.GetGlobalStateOrDefault<UserContext>(UserContext.GlobalStateKey)?.CustomerId is { Length: > 0 } customerId
-            ? customerId
-            : null;
 }

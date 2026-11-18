@@ -29,9 +29,17 @@ public class InMemoryReceiptRepositoryTests
     [Fact]
     public async Task GetByIds_returns_found_receipts_and_omits_unknown_ids()
     {
-        var result = await _repository.GetByIdsAsync(["r1", "missing", "r2"], Ct);
+        var result = await _repository.GetByIdsAsync("customer-1", ["r1", "missing", "r2"], Ct);
 
         Assert.Equal(["r1", "r2"], result.Keys.Order());
+    }
+
+    [Fact]
+    public async Task GetByIds_omits_receipts_owned_by_another_customer_or_by_no_customer()
+    {
+        var result = await _repository.GetByIdsAsync("customer-1", ["r1", "r4", "anon"], Ct);
+
+        Assert.Equal(["r1"], result.Keys);
     }
 
     [Fact]

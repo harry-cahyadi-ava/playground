@@ -10,11 +10,11 @@ namespace ReceiptSubgraph.Tests;
 /// </summary>
 internal sealed class RecordingReceiptRepository(IReceiptRepository inner) : IReceiptRepository
 {
-    private readonly List<IReadOnlyList<string>> _idLookups = [];
+    private readonly List<(string CustomerId, string[] ReceiptIds)> _idLookups = [];
     private readonly List<(string CustomerId, ReceiptResultInput? Input)> _customerLookups = [];
     private Exception? _failure;
 
-    public IReadOnlyList<IReadOnlyList<string>> IdLookups => _idLookups;
+    public IReadOnlyList<(string CustomerId, string[] ReceiptIds)> IdLookups => _idLookups;
 
     public IReadOnlyList<(string CustomerId, ReceiptResultInput? Input)> CustomerLookups => _customerLookups;
 
@@ -22,6 +22,7 @@ internal sealed class RecordingReceiptRepository(IReceiptRepository inner) : IRe
     public void FailWith(Exception failure) => _failure = failure;
 
     public ValueTask<IReadOnlyDictionary<string, Receipt>> GetByIdsAsync(
+        string customerId,
         IReadOnlyList<string> receiptIds,
         CancellationToken cancellationToken)
     {
@@ -33,10 +34,10 @@ internal sealed class RecordingReceiptRepository(IReceiptRepository inner) : IRe
         // The DataLoader reuses its key list, so keep a copy.
         lock (_idLookups)
         {
-            _idLookups.Add(receiptIds.ToArray());
+            _idLookups.Add((customerId, receiptIds.ToArray()));
         }
 
-        return inner.GetByIdsAsync(receiptIds, cancellationToken);
+        return inner.GetByIdsAsync(customerId, receiptIds, cancellationToken);
     }
 
     public ValueTask<Page<Receipt>> GetByCustomerAsync(

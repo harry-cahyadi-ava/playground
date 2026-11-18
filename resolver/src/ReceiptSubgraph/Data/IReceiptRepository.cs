@@ -9,8 +9,12 @@ namespace ReceiptSubgraph.Data;
 /// </summary>
 public interface IReceiptRepository
 {
-    /// <summary>Loads receipts by id. Ids without a receipt are absent from the returned dictionary.</summary>
+    /// <summary>
+    /// Loads the customer's receipts by id. Ids without a receipt, or whose receipt belongs to another customer
+    /// (or to no customer), are absent from the returned dictionary.
+    /// </summary>
     ValueTask<IReadOnlyDictionary<string, Receipt>> GetByIdsAsync(
+        string customerId,
         IReadOnlyList<string> receiptIds,
         CancellationToken cancellationToken);
 

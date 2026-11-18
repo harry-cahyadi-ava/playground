@@ -1,7 +1,9 @@
 using HotChocolate;
 using HotChocolate.ApolloFederation.Resolvers;
 using HotChocolate.ApolloFederation.Types;
+using HotChocolate.Resolvers;
 using HotChocolate.Types;
+using ReceiptSubgraph.Authorization;
 using ReceiptSubgraph.GraphQL.DataLoaders;
 
 namespace ReceiptSubgraph.Domain;
@@ -70,13 +72,38 @@ public sealed record Receipt : IReceiptResponse
     public bool IsReturn { get; init; }
 
     /// <summary>
-    /// Resolves the Receipt entity when another subgraph references it.
+    /// Resolves the Receipt entity when another subgraph references it, for the signed-in customer only.
     /// Uses a DataLoader so that many references in one request become a single batched lookup.
     /// </summary>
+    /// <remarks>
+    /// An entity reference cannot resolve to an error value (the entity union only holds entity types), so a receipt
+    /// that does not exist and one owned by someone else are reported identically: the entity is null and the response
+    /// carries a <see cref="NotFoundCode"/> error for it.
+    /// </remarks>
     [ReferenceResolver]
     public static async Task<Receipt?> ResolveReferenceAsync(
         string id,
+        IResolverContext context,
         IReceiptByIdDataLoader receiptById,
         CancellationToken cancellationToken)
-        => await receiptById.LoadAsync(id, cancellationToken);
+    {
+        if (context.GetCustomerId() is not { } customerId)
+        {
+            throw new GraphQLException(
+                ErrorBuilder.New()
+                    .SetMessage("A signed-in customer is required to view receipts.")
+                    .SetCode(RequestAuthorizationInterceptor.UnauthenticatedCode)
+                    .Build());
+        }
+
+        return await receiptById.LoadAsync(new ReceiptByIdKey(customerId, id), cancellationToken)
+            ?? throw new GraphQLException(
+                ErrorBuilder.New()
+                    .SetMessage(NotFoundError.ForReceipt(id).Message)
+                    .SetCode(NotFoundCode)
+                    .Build());
+    }
+
+    /// <summary>The error code reported when a referenced receipt is not found for the signed-in customer.</summary>
+    public const string NotFoundCode = "NOT_FOUND";
 }
