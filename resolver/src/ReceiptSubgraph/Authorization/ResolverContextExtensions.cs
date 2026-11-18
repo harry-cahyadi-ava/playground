@@ -12,4 +12,8 @@ public static class ResolverContextExtensions
         => context.GetGlobalStateOrDefault<UserContext>(UserContext.GlobalStateKey)?.CustomerId is { Length: > 0 } customerId
             ? customerId
             : null;
+
+    /// <summary>The loyalty association code from the optional <c>loyalty-association</c> request header, or null when it was not sent.</summary>
+    public static string? GetLoyaltyAssociationCode(this IResolverContext context)
+        => context.GetGlobalStateOrDefault<UserContext>(UserContext.GlobalStateKey)?.LoyaltyAssociationCode;
 }

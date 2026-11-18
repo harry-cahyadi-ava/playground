@@ -4,10 +4,13 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+using HotChocolate.Execution;
 using ReceiptSubgraph.Authorization;
 
 namespace ReceiptSubgraph.Tests.Authorization;
@@ -104,6 +107,43 @@ public sealed class RequestAuthorizationInterceptorTests
 
         Assert.Equal(HttpStatusCode.OK, response.Status);
         Assert.Null(roles.Token);
+    }
+
+    [Theory]
+    [InlineData("gold", "gold")]
+    [InlineData("  gold  ", "gold")]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData(null, null)]
+    public async Task The_optional_loyalty_association_header_is_added_to_the_user_context_as_the_loyalty_association_code(string? header, string? expected)
+    {
+        var user = await CreateUserContextAsync(header);
+
+        Assert.Equal(expected, user.LoyaltyAssociationCode);
+        Assert.Equal("customer-1", user.CustomerId);
+    }
+
+    private static async Task<UserContext> CreateUserContextAsync(string? loyaltyAssociationHeader)
+    {
+        var services = new ServiceCollection()
+            .AddSingleton(Options.Create(new AuthorizationOptions()))
+            .AddSingleton<IAuthorizationHandler>(new FakeHandler(SignedIn()))
+            .BuildServiceProvider();
+
+        var httpContext = new DefaultHttpContext { RequestServices = services };
+        httpContext.Request.Headers["Authorization"] = "Bearer role-token";
+
+        if (loyaltyAssociationHeader is not null)
+        {
+            httpContext.Request.Headers[RequestAuthorizationInterceptor.LoyaltyAssociationHeader] = loyaltyAssociationHeader;
+        }
+
+        var builder = OperationRequestBuilder.New().SetDocument("{ __typename }");
+        await new RequestAuthorizationInterceptor().OnCreateAsync(
+            httpContext, null!, builder, TestContext.Current.CancellationToken);
+
+        var request = Assert.IsType<OperationRequest>(builder.Build());
+        return Assert.IsType<UserContext>(request.ContextData![UserContext.GlobalStateKey]);
     }
 
     private static void AssertError(Response response, string code, string? message = null)
