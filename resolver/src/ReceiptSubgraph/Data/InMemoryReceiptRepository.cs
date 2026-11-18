@@ -35,7 +35,7 @@ public sealed class InMemoryReceiptRepository : IReceiptRepository
     }
 
     public ValueTask<IReadOnlyDictionary<string, Receipt>> GetByIdsAsync(
-        string customerId,
+        ReceiptUserContext user,
         IReadOnlyList<string> receiptIds,
         CancellationToken cancellationToken)
     {
@@ -45,7 +45,7 @@ public sealed class InMemoryReceiptRepository : IReceiptRepository
         // and map only the rows that come back; ids without a row stay out of the dictionary.
         foreach (var id in receiptIds)
         {
-            if (_byId.TryGetValue(id, out var receipt) && receipt.CustomerId == customerId)
+            if (_byId.TryGetValue(id, out var receipt) && receipt.CustomerId == user.CustomerId)
             {
                 result[id] = receipt;
             }
@@ -55,14 +55,14 @@ public sealed class InMemoryReceiptRepository : IReceiptRepository
     }
 
     public ValueTask<Page<Receipt>> GetByCustomerAsync(
-        string customerId,
+        ReceiptUserContext user,
         ReceiptResultInput? input,
         CancellationToken cancellationToken)
     {
         var filter = input?.Filter;
 
         // An empty order id list means "no order matches", which is different from not filtering by order.
-        if (!_byCustomerId.TryGetValue(customerId, out var candidates) || filter?.OrderIds is { Count: 0 })
+        if (!_byCustomerId.TryGetValue(user.CustomerId, out var candidates) || filter?.OrderIds is { Count: 0 })
         {
             return ValueTask.FromResult(Page.Empty<Receipt>());
         }

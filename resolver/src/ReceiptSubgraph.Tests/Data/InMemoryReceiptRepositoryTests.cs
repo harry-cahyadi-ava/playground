@@ -22,14 +22,14 @@ public class InMemoryReceiptRepositoryTests
 
     private async Task<string[]> CustomerReceiptIdsAsync(ReceiptResultInput? input, string customerId = "customer-1")
     {
-        var page = await _repository.GetByCustomerAsync(customerId, input, Ct);
+        var page = await _repository.GetByCustomerAsync(new ReceiptUserContext(customerId), input, Ct);
         return page.Items.Select(r => r.Id).ToArray();
     }
 
     [Fact]
     public async Task GetByIds_returns_found_receipts_and_omits_unknown_ids()
     {
-        var result = await _repository.GetByIdsAsync("customer-1", ["r1", "missing", "r2"], Ct);
+        var result = await _repository.GetByIdsAsync(new ReceiptUserContext("customer-1"), ["r1", "missing", "r2"], Ct);
 
         Assert.Equal(["r1", "r2"], result.Keys.Order());
     }
@@ -37,7 +37,7 @@ public class InMemoryReceiptRepositoryTests
     [Fact]
     public async Task GetByIds_omits_receipts_owned_by_another_customer_or_by_no_customer()
     {
-        var result = await _repository.GetByIdsAsync("customer-1", ["r1", "r4", "anon"], Ct);
+        var result = await _repository.GetByIdsAsync(new ReceiptUserContext("customer-1"), ["r1", "r4", "anon"], Ct);
 
         Assert.Equal(["r1"], result.Keys);
     }
@@ -57,7 +57,7 @@ public class InMemoryReceiptRepositoryTests
     [Fact]
     public async Task An_unknown_customer_gets_an_empty_page()
     {
-        var page = await _repository.GetByCustomerAsync("nobody", null, Ct);
+        var page = await _repository.GetByCustomerAsync(new ReceiptUserContext("nobody"), null, Ct);
 
         Assert.Empty(page.Items);
         Assert.Equal(0, page.TotalCount);
@@ -138,7 +138,7 @@ public class InMemoryReceiptRepositoryTests
     {
         var input = new ReceiptResultInput(new ReceiptFilter { StoreId = "s1" }, new PageRequest(First: 1));
 
-        var page = await _repository.GetByCustomerAsync("customer-1", input, Ct);
+        var page = await _repository.GetByCustomerAsync(new ReceiptUserContext("customer-1"), input, Ct);
 
         Assert.Equal(["r2"], page.Items.Select(r => r.Id));
         Assert.True(page.PageInfo.HasNextPage);
@@ -153,7 +153,7 @@ public class InMemoryReceiptRepositoryTests
             [TestReceipts.Create("b", sameTime), TestReceipts.Create("a", sameTime)],
             new PaginationOptions());
 
-        var page = await repository.GetByCustomerAsync("customer-1", null, Ct);
+        var page = await repository.GetByCustomerAsync(new ReceiptUserContext("customer-1"), null, Ct);
 
         Assert.Equal(["a", "b"], page.Items.Select(r => r.Id));
     }

@@ -79,7 +79,7 @@ public static class ServiceCollectionExtensions
             .ConfigureSchema(schema => schema.SetSchema(d => d.Directive(new NamespaceDirective("Receipt"))))
             .AddErrorFilter<PaginationErrorFilter>()
             // Validates the Authorization header on every HTTP request to the endpoint.
-            .AddHttpRequestInterceptor<RequestAuthorizationInterceptor>()
+            .AddHttpRequestInterceptor<RequestInterceptor>()
             // Reject abusively deep operations before they are executed.
             .AddMaxExecutionDepthRule(15)
             // Keep the SDL free of @cost annotations; the subgraph contract is defined by schema.graphql.

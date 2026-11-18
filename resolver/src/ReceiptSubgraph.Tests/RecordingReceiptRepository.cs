@@ -10,19 +10,19 @@ namespace ReceiptSubgraph.Tests;
 /// </summary>
 internal sealed class RecordingReceiptRepository(IReceiptRepository inner) : IReceiptRepository
 {
-    private readonly List<(string CustomerId, string[] ReceiptIds)> _idLookups = [];
-    private readonly List<(string CustomerId, ReceiptResultInput? Input)> _customerLookups = [];
+    private readonly List<(ReceiptUserContext User, string[] ReceiptIds)> _idLookups = [];
+    private readonly List<(ReceiptUserContext User, ReceiptResultInput? Input)> _customerLookups = [];
     private Exception? _failure;
 
-    public IReadOnlyList<(string CustomerId, string[] ReceiptIds)> IdLookups => _idLookups;
+    public IReadOnlyList<(ReceiptUserContext User, string[] ReceiptIds)> IdLookups => _idLookups;
 
-    public IReadOnlyList<(string CustomerId, ReceiptResultInput? Input)> CustomerLookups => _customerLookups;
+    public IReadOnlyList<(ReceiptUserContext User, ReceiptResultInput? Input)> CustomerLookups => _customerLookups;
 
     /// <summary>Makes every following lookup throw, to simulate the backing store being unavailable.</summary>
     public void FailWith(Exception failure) => _failure = failure;
 
     public ValueTask<IReadOnlyDictionary<string, Receipt>> GetByIdsAsync(
-        string customerId,
+        ReceiptUserContext user,
         IReadOnlyList<string> receiptIds,
         CancellationToken cancellationToken)
     {
@@ -34,14 +34,14 @@ internal sealed class RecordingReceiptRepository(IReceiptRepository inner) : IRe
         // The DataLoader reuses its key list, so keep a copy.
         lock (_idLookups)
         {
-            _idLookups.Add((customerId, receiptIds.ToArray()));
+            _idLookups.Add((user, receiptIds.ToArray()));
         }
 
-        return inner.GetByIdsAsync(customerId, receiptIds, cancellationToken);
+        return inner.GetByIdsAsync(user, receiptIds, cancellationToken);
     }
 
     public ValueTask<Page<Receipt>> GetByCustomerAsync(
-        string customerId,
+        ReceiptUserContext user,
         ReceiptResultInput? input,
         CancellationToken cancellationToken)
     {
@@ -52,9 +52,9 @@ internal sealed class RecordingReceiptRepository(IReceiptRepository inner) : IRe
 
         lock (_customerLookups)
         {
-            _customerLookups.Add((customerId, input));
+            _customerLookups.Add((user, input));
         }
 
-        return inner.GetByCustomerAsync(customerId, input, cancellationToken);
+        return inner.GetByCustomerAsync(user, input, cancellationToken);
     }
 }

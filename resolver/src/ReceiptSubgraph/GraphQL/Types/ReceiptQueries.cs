@@ -28,14 +28,14 @@ public static partial class ReceiptQueries
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
-        if (context.GetCustomerId() is not { } customerId)
+        if (context.GetReceiptUserContext() is not { } user)
         {
             return new UnauthorizedError(UnauthorizedMessage);
         }
 
         try
         {
-            var receipt = await receiptById.LoadAsync(new ReceiptByIdKey(customerId, id), cancellationToken);
+            var receipt = await receiptById.LoadAsync(new ReceiptByIdKey(user, id), cancellationToken);
 
             return receipt is not null
                 ? receipt
@@ -56,21 +56,21 @@ public static partial class ReceiptQueries
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
-        if (context.GetCustomerId() is not { } customerId)
+        if (context.GetReceiptUserContext() is not { } user)
         {
             return new UnauthorizedError(UnauthorizedMessage);
         }
 
         try
         {
-            var page = await repository.GetByCustomerAsync(customerId, input, cancellationToken);
+            var page = await repository.GetByCustomerAsync(user, input, cancellationToken);
 
             return ReceiptConnection.From(page);
         }
         // Invalid paging arguments are the client's mistake and are reported by PaginationErrorFilter.
         catch (Exception exception) when (exception is not (OperationCanceledException or InvalidPaginationException))
         {
-            loggerFactory.CreateLogger(typeof(ReceiptQueries)).LogError(exception, "Failed to load receipts for customer {CustomerId}.", customerId);
+            loggerFactory.CreateLogger(typeof(ReceiptQueries)).LogError(exception, "Failed to load receipts for customer {CustomerId}.", user.CustomerId);
             return new InternalServerError(InternalErrorMessage);
         }
     }

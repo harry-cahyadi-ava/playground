@@ -44,7 +44,11 @@ internal sealed class SubgraphHarness : IAsyncDisposable
     }
 
     /// <summary>Executes a query and returns the JSON response as a document, optionally as a signed-in customer.</summary>
-    public async Task<JsonDocument> QueryAsync(string query, Dictionary<string, object?>? variables = null, string? customerId = null)
+    public async Task<JsonDocument> QueryAsync(
+        string query,
+        Dictionary<string, object?>? variables = null,
+        string? customerId = null,
+        string? loyaltyAssociationCode = null)
     {
         var request = OperationRequestBuilder.New().SetDocument(query);
 
@@ -55,7 +59,9 @@ internal sealed class SubgraphHarness : IAsyncDisposable
 
         if (customerId is not null)
         {
-            request.SetGlobalState(UserContext.GlobalStateKey, new UserContext { CustomerId = customerId });
+            request.SetGlobalState(
+                UserContext.GlobalStateKey,
+                new UserContext { CustomerId = customerId, LoyaltyAssociationCode = loyaltyAssociationCode });
         }
 
         var result = await Executor.ExecuteAsync(request.Build(), TestContext.Current.CancellationToken);

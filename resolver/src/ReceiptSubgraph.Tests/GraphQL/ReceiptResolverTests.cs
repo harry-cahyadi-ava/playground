@@ -107,7 +107,7 @@ public class ReceiptResolverTests : IAsyncLifetime
             ("Receipt", "receipt-1"), ("Receipt", "receipt-2"), ("Receipt", "receipt-3"), ("Receipt", "missing"));
 
         var lookup = Assert.Single(_harness.Repository.IdLookups);
-        Assert.Equal("customer-1", lookup.CustomerId);
+        Assert.Equal("customer-1", lookup.User.CustomerId);
         Assert.Equal(["missing", "receipt-1", "receipt-2", "receipt-3"], lookup.ReceiptIds.Order());
     }
 
@@ -358,7 +358,7 @@ public class ReceiptResolverTests : IAsyncLifetime
         await ReceiptsAsync("{ receipts { __typename } }", customerId: "customer-2");
 
         var lookup = Assert.Single(_harness.Repository.CustomerLookups);
-        Assert.Equal("customer-2", lookup.CustomerId);
+        Assert.Equal("customer-2", lookup.User.CustomerId);
     }
 
     [Fact]
@@ -406,8 +406,21 @@ public class ReceiptResolverTests : IAsyncLifetime
 
         // One batch, and the repeated id is only asked for once.
         var lookup = Assert.Single(_harness.Repository.IdLookups);
-        Assert.Equal("customer-1", lookup.CustomerId);
+        Assert.Equal("customer-1", lookup.User.CustomerId);
         Assert.Equal(["receipt-1", "receipt-2"], lookup.ReceiptIds.Order());
+    }
+
+    [Fact]
+    public async Task The_loyalty_association_code_reaches_the_repository_with_the_customer()
+    {
+        await _harness.QueryAsync(
+            "{ receipt(id: \"receipt-1\") { __typename } receipts { __typename } }",
+            customerId: "customer-1",
+            loyaltyAssociationCode: "ABC123");
+
+        var expected = new ReceiptUserContext("customer-1", "ABC123");
+        Assert.Equal(expected, Assert.Single(_harness.Repository.IdLookups).User);
+        Assert.Equal(expected, Assert.Single(_harness.Repository.CustomerLookups).User);
     }
 
     [Fact]
@@ -424,7 +437,7 @@ public class ReceiptResolverTests : IAsyncLifetime
         Assert.Equal(["receipt-1"], Assert.Single(_harness.Repository.IdLookups).ReceiptIds);
 
         var listing = Assert.Single(_harness.Repository.CustomerLookups);
-        Assert.Equal("customer-1", listing.CustomerId);
+        Assert.Equal("customer-1", listing.User.CustomerId);
         Assert.Equal("store-1", listing.Input?.Filter?.StoreId);
     }
 

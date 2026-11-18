@@ -3,8 +3,9 @@ using HotChocolate.ApolloFederation.Resolvers;
 using HotChocolate.ApolloFederation.Types;
 using HotChocolate.Resolvers;
 using HotChocolate.Types;
-using ReceiptSubgraph.Authorization;
+using ReceiptSubgraph.GraphQL;
 using ReceiptSubgraph.GraphQL.DataLoaders;
+using ReceiptSubgraph.Infrastructure;
 
 namespace ReceiptSubgraph.Domain;
 
@@ -87,16 +88,16 @@ public sealed record Receipt : IReceiptResponse
         IReceiptByIdDataLoader receiptById,
         CancellationToken cancellationToken)
     {
-        if (context.GetCustomerId() is not { } customerId)
+        if (context.GetReceiptUserContext() is not { } user)
         {
             throw new GraphQLException(
                 ErrorBuilder.New()
                     .SetMessage("A signed-in customer is required to view receipts.")
-                    .SetCode(RequestAuthorizationInterceptor.UnauthenticatedCode)
+                    .SetCode(RequestInterceptor.UnauthenticatedCode)
                     .Build());
         }
 
-        return await receiptById.LoadAsync(new ReceiptByIdKey(customerId, id), cancellationToken)
+        return await receiptById.LoadAsync(new ReceiptByIdKey(user, id), cancellationToken)
             ?? throw new GraphQLException(
                 ErrorBuilder.New()
                     .SetMessage(NotFoundError.ForReceipt(id).Message)

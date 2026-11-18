@@ -21,11 +21,11 @@ public sealed class ReceiptRepository : IReceiptRepository
     }
 
     public ValueTask<IReadOnlyDictionary<string, Receipt>> GetByIdsAsync(
-        string customerId,
+        ReceiptUserContext user,
         IReadOnlyList<string> receiptIds,
         CancellationToken cancellationToken)
     {
-        // TODO: Fetch all ids in a single query (WHERE CustomerId = @customerId AND Id IN (...)), not one query per id.
+        // TODO: Fetch all ids in a single query (WHERE CustomerId = @user.CustomerId AND Id IN (...)), not one query per id.
         // Receipts owned by another customer (or by no customer) must not be returned or mapped.
         // TODO: Load child data (items, payments, etc.) with batched queries keyed by the fetched receipt ids.
         // TODO: Map only the returned rows to Receipt.
@@ -34,13 +34,14 @@ public sealed class ReceiptRepository : IReceiptRepository
     }
 
     public ValueTask<Page<Receipt>> GetByCustomerAsync(
-        string customerId,
+        ReceiptUserContext user,
         ReceiptResultInput? input,
         CancellationToken cancellationToken)
     {
         // TODO: Translate input.Filter into WHERE clauses (OrderIds, StoreId, StoreBrand, StoreSalesChannel,
         // DateFrom/DateTo, both inclusive). An empty OrderIds list means "match nothing", not "no order filter".
-        // TODO: Restrict to the customer (WHERE CustomerId = @customerId). Receipts without a customer are never listed.
+        // TODO: Restrict to the customer (WHERE CustomerId = @user.CustomerId). Receipts without a customer are never listed.
+        // TODO: Use user.LoyaltyAssociationCode if the query depends on it.
         // TODO: Order by CreatedAt DESC, then Id, so offset cursors stay stable between requests.
         // TODO: Run a COUNT for TotalCount (or COUNT(*) OVER() in the same query).
         // TODO: Work out the page window from input.Pagination and _paginationOptions. Paginator.Slice needs the whole
