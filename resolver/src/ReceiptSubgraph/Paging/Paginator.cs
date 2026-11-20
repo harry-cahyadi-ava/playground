@@ -1,12 +1,32 @@
 namespace ReceiptSubgraph.Paging;
 
+/// <summary>The range of positions, within the full ordered result set, that a page covers.</summary>
+/// <param name="Start">The position of the first item of the page.</param>
+/// <param name="Count">The number of items in the page.</param>
+public readonly record struct PageWindow(int Start, int Count);
+
 /// <summary>
-/// Applies Relay-style cursor pagination (first/after/last/before) to an in-memory, ordered list.
+/// Applies Relay-style cursor pagination (first/after/last/before) to an ordered result set.
 /// Cursors are positional offsets, so the source must use a stable ordering between requests.
+/// <see cref="Slice{T}"/> pages an in-memory list; <see cref="ComputeWindow"/> and <see cref="BuildPage{T}"/> let a
+/// store that pages in the query (OFFSET/FETCH) fetch only the window and build the same page.
 /// </summary>
 public static class Paginator
 {
     public static Page<T> Slice<T>(IReadOnlyList<T> source, PageRequest? request, PaginationOptions options)
+    {
+        var window = ComputeWindow(request, options, source.Count);
+        var items = Copy(source, window.Start, window.Count);
+
+        return BuildPage(items, window.Start, source.Count);
+    }
+
+    /// <summary>
+    /// Works out which positions the request selects from a result set of <paramref name="total"/> items.
+    /// Throws <see cref="InvalidPaginationException"/> when the sizes or cursors are invalid.
+    /// </summary>
+    public static PageWindow 
+    ComputeWindow(PageRequest? request, PaginationOptions options, int total)
     {
         var first = Validate(request?.First, "first", options);
         var last = Validate(request?.Last, "last", options);
@@ -16,8 +36,6 @@ public static class Paginator
         {
             first = options.DefaultPageSize;
         }
-
-        var total = source.Count;
 
         // The window is [start, end). Cursors narrow it, then first/last trim it, in the order Relay specifies.
         var start = 0;
@@ -46,7 +64,15 @@ public static class Paginator
             start = Math.Max(start, end - lastCount);
         }
 
-        var items = Copy(source, start, end - start);
+        return new PageWindow(start, end - start);
+    }
+
+    /// <summary>
+    /// Builds the page for the items found at <paramref name="start"/> in a result set of <paramref name="total"/> items.
+    /// </summary>
+    public static Page<T> BuildPage<T>(IReadOnlyList<T> items, int start, int total)
+    {
+        var end = start + items.Count;
         var pageInfo = new PageInfo(
             HasNextPage: end < total,
             HasPreviousPage: start > 0,

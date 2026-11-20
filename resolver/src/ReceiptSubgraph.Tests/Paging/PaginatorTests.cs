@@ -172,6 +172,55 @@ public class PaginatorTests
         Assert.Equal([1, 2], page.Items);
     }
 
+    [Fact]
+    public void Window_for_a_total_selects_only_the_requested_positions()
+    {
+        var window = Paginator.ComputeWindow(new PageRequest(First: 2, After: CursorOf(1)), Options, total: 6);
+
+        Assert.Equal(new PageWindow(Start: 2, Count: 2), window);
+    }
+
+    [Fact]
+    public void Window_beyond_the_total_is_empty()
+    {
+        var window = Paginator.ComputeWindow(new PageRequest(After: CursorOf(int.MaxValue)), Options, total: 3);
+
+        Assert.Equal(0, window.Count);
+    }
+
+    [Fact]
+    public void Window_rejects_invalid_arguments()
+    {
+        Assert.Throws<InvalidPaginationException>(
+            () => Paginator.ComputeWindow(new PageRequest(First: 11), Options, total: 3));
+    }
+
+    [Fact]
+    public void A_page_built_from_a_fetched_window_matches_slicing_the_whole_list()
+    {
+        var source = Numbers(11);
+        var request = new PageRequest(Last: 3, Before: CursorOf(8));
+
+        var window = Paginator.ComputeWindow(request, Options, source.Length);
+        var fetched = source.Skip(window.Start).Take(window.Count).ToArray();
+
+        Assert.Equal(Slice(source, request), Paginator.BuildPage(fetched, window.Start, source.Length), PageComparer.Instance);
+    }
+
+    private sealed class PageComparer : IEqualityComparer<Page<int>>
+    {
+        public static readonly PageComparer Instance = new();
+
+        public bool Equals(Page<int>? x, Page<int>? y)
+            => x is not null && y is not null
+                && x.Items.SequenceEqual(y.Items)
+                && x.PageInfo == y.PageInfo
+                && x.TotalCount == y.TotalCount
+                && x.Offset == y.Offset;
+
+        public int GetHashCode(Page<int> obj) => obj.TotalCount;
+    }
+
     [Theory]
     [InlineData(-1, null)]
     [InlineData(11, null)]

@@ -44,11 +44,10 @@ public sealed class ReceiptRepository : IReceiptRepository
         // TODO: Use user.LoyaltyAssociationCode if the query depends on it.
         // TODO: Order by CreatedAt DESC, then Id, so offset cursors stay stable between requests.
         // TODO: Run a COUNT for TotalCount (or COUNT(*) OVER() in the same query).
-        // TODO: Work out the page window from input.Pagination and _paginationOptions. Paginator.Slice needs the whole
-        // list in memory, so extract the window and page building into reusable methods (validation, cursor decoding,
-        // PageInfo) before using them here. Invalid arguments must throw InvalidPaginationException.
-        // TODO: Fetch only that window (OFFSET/FETCH), then map those rows to Receipt.
-        // TODO: Return Page<Receipt> with the items, PageInfo, TotalCount and Offset. Use Page.Empty<Receipt>() when
+        // TODO: Work out the page window with Paginator.ComputeWindow(input?.Pagination, _paginationOptions, totalCount).
+        // Invalid arguments throw InvalidPaginationException.
+        // TODO: Fetch only that window (OFFSET window.Start, FETCH window.Count), then map those rows to Receipt.
+        // TODO: Return Paginator.BuildPage(receipts, window.Start, totalCount). Use Page.Empty<Receipt>() when
         // nothing matches.
         throw new NotImplementedException();
     }
