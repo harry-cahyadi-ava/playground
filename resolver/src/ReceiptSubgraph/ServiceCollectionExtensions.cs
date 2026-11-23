@@ -61,13 +61,13 @@ public static class ServiceCollectionExtensions
             .AddApolloFederation(FederationVersion.Federation25)
             // Resolvers, DataLoaders and object types discovered by the source generator.
             .AddReceiptTypes()
-            // The root fields (receipt, receipts) come from ReceiptQueries; federation adds _entities and _service.
+            // The root fields (transaction, transactions) come from ReceiptQueries; federation adds _entities and _service.
             // Types that are not reachable from any field but are part of the subgraph contract.
             .AddType<NotFoundError>()
             .AddType<UnauthorizedError>()
             .AddType<InternalServerError>()
             .AddType<ReceiptItemBag>()
-            // Only reachable through the ReceiptsResponse union, so it is registered explicitly.
+            // Only reachable through the TransactionsResponse union, so it is registered explicitly.
             .AddType<ReceiptConnection>()
             .AddType<MoneyType>()
             .AddType<FlybuysBarcodeNumberType>()
@@ -76,7 +76,7 @@ public static class ServiceCollectionExtensions
             .AddDirectiveType<NamespaceDirectiveType>()
             // Every decimal in the schema is a monetary amount.
             .BindRuntimeType<decimal, MoneyType>()
-            .ConfigureSchema(schema => schema.SetSchema(d => d.Directive(new NamespaceDirective("Receipt"))))
+            .ConfigureSchema(schema => schema.SetSchema(d => d.Directive(new NamespaceDirective("DigitalReceipts"))))
             .AddErrorFilter<PaginationErrorFilter>()
             // Validates the Authorization header on every HTTP request to the endpoint.
             .AddHttpRequestInterceptor<RequestInterceptor>()

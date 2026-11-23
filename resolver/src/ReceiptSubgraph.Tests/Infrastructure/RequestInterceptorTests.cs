@@ -19,7 +19,7 @@ namespace ReceiptSubgraph.Tests.Infrastructure;
 public sealed class RequestInterceptorTests
 {
     private const string TypenameQuery = """{"query":"{ __typename }"}""";
-    private const string ReceiptsQuery = """{"query":"{ receipts { __typename ... on ReceiptConnection { totalCount } } }"}""";
+    private const string ReceiptsQuery = """{"query":"{ transactions { __typename ... on TransactionConnection { totalCount } } }"}""";
 
     private static AuthorizationResult SignedIn(string customerId = "customer-1")
         => AuthorizationResult.Success(new UserContext { CustomerId = customerId });
@@ -44,8 +44,8 @@ public sealed class RequestInterceptorTests
         await using var host = await StartAsync(new FakeHandler(SignedIn("customer-1")));
         var response = await host.PostAsync("Bearer role-token", ReceiptsQuery);
 
-        var receipts = response.Json.RootElement.GetProperty("data").GetProperty("receipts");
-        Assert.Equal("ReceiptConnection", receipts.GetProperty("__typename").GetString());
+        var receipts = response.Json.RootElement.        GetProperty("data").GetProperty("transactions");
+                Assert.Equal("TransactionConnection", receipts.GetProperty("__typename").GetString());
         Assert.Equal(3, receipts.GetProperty("totalCount").GetInt32());
     }
 
@@ -57,7 +57,7 @@ public sealed class RequestInterceptorTests
 
         Assert.Equal(
             "UnauthorizedError",
-            response.Json.RootElement.GetProperty("data").GetProperty("receipts").GetProperty("__typename").GetString());
+            response.Json.RootElement.GetProperty("data").GetProperty("transactions").GetProperty("__typename").GetString());
     }
 
     [Theory]

@@ -1,8 +1,10 @@
+using HotChocolate;
 using ReceiptSubgraph.GraphQL.Directives;
 
 namespace ReceiptSubgraph.Domain;
 
 /// <summary>Represents the types of invoice associated with a receipt.</summary>
+[GraphQLName("TransactionInvoiceType")]
 public enum ReceiptInvoiceType
 {
     Created,
@@ -14,12 +16,14 @@ public enum ReceiptInvoiceType
 }
 
 /// <summary>Represents the types of promotions applicable to a receipt item.</summary>
+[GraphQLName("TransactionItemPromotionType")]
 public enum ReceiptItemPromotionType
 {
     ColesPlusSaverDiscount,
 }
 
 /// <summary>Represents the types of quantity measurements for a receipt item.</summary>
+[GraphQLName("TransactionQuantityType")]
 public enum QuantityType
 {
     Count,
@@ -27,6 +31,7 @@ public enum QuantityType
 }
 
 /// <summary>Represents the types of payment methods available for a receipt payment.</summary>
+[GraphQLName("TransactionPaymentMethodType")]
 public enum ReceiptPaymentMethodType
 {
     Credit,
@@ -47,6 +52,7 @@ public enum ReceiptPaymentMethodType
 }
 
 /// <summary>Represents the card schemes (or networks) available for a receipt payment.</summary>
+[GraphQLName("TransactionPaymentMethodScheme")]
 public enum ReceiptPaymentMethodScheme
 {
     Visa,

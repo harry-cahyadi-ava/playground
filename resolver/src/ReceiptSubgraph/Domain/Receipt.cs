@@ -10,10 +10,11 @@ using ReceiptSubgraph.Infrastructure;
 namespace ReceiptSubgraph.Domain;
 
 /// <summary>
-/// A receipt for an in-store or online purchase.
+/// A receipt for an in-store or online purchase, exposed in the schema as a <c>Transaction</c>.
 /// Storage details (ids of other entities, the item list) are hidden from the schema and exposed through
 /// resolvers in <c>ReceiptNode</c> instead.
 /// </summary>
+[GraphQLName("Transaction")]
 [Key("id")]
 public sealed record Receipt : IReceiptResponse
 {
@@ -59,7 +60,8 @@ public sealed record Receipt : IReceiptResponse
     /// <summary>The invoice type for Coles online orders. Null if it is not a Coles online order.</summary>
     public ReceiptInvoiceType? InvoiceType { get; init; }
 
-    /// <summary>The details captured for tax invoice purposes. Null if no such details were supplied.</summary>
+    /// <summary>The details captured for tax invoice purposes; exposed through <c>customerContext</c>.</summary>
+    [GraphQLIgnore]
     public ReceiptInvoiceDetails? InvoiceDetails { get; init; }
 
     /// <summary>True if a tax invoice (downloadable as PDF) is available for this receipt.</summary>

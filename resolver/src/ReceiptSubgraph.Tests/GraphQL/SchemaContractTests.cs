@@ -59,8 +59,8 @@ public class SchemaContractTests : IAsyncLifetime
     {
         var sdl = await LoadSdlAsync();
 
-        // Customer and Order are references only, so Receipt is the sole resolvable entity.
-        Assert.Matches(@"union _Entity = Receipt\s*(\r?\n|$)", sdl);
+        // Customer and Order are references only, so Transaction is the sole resolvable entity.
+        Assert.Matches(@"union _Entity = Transaction\s*(\r?\n|$)", sdl);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public class SchemaContractTests : IAsyncLifetime
         var sdl = await LoadSdlAsync();
 
         Assert.Contains("https://specs.apollo.dev/federation/v2.5", sdl);
-        Assert.Contains("@namespace(name: \"Receipt\")", sdl);
+        Assert.Contains("@namespace(name: \"DigitalReceipts\")", sdl);
         Assert.DoesNotContain("@cost", sdl);
     }
 

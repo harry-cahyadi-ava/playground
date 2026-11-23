@@ -5,6 +5,7 @@ using ReceiptSubgraph.GraphQL.Scalars;
 namespace ReceiptSubgraph.Domain;
 
 /// <summary>The amount that the receipt resolves to (broken down into its various components).</summary>
+[GraphQLName("TransactionAmount")]
 public sealed record ReceiptAmount
 {
     /// <summary>The total amount of the receipt.</summary>
@@ -29,7 +30,7 @@ public sealed record ReceiptAmount
     public required decimal TeamMemberDiscount { get; init; }
 }
 
-/// <summary>The details captured on a receipt for tax invoice purposes, as supplied at the time of purchase.</summary>
+/// <summary>The details captured on a receipt for tax invoice purposes, as supplied at the time of purchase (storage only).</summary>
 public sealed record ReceiptInvoiceDetails
 {
     /// <summary>The customer's name as supplied for the order or receipt.</summary>
@@ -51,7 +52,59 @@ public sealed record ReceiptInvoiceDetails
     public string? Address { get; init; }
 }
 
+/// <summary>
+/// The customer details on a receipt, as supplied at the time of purchase.
+/// These values belong to the individual receipt and may differ between receipts of the same customer.
+/// </summary>
+[GraphQLName("TransactionCustomer")]
+public sealed record ReceiptCustomerContext
+{
+    /// <summary>The customer associated with the receipt, completed by the Customer subgraph.</summary>
+    public Customer? Customer { get; init; }
+
+    /// <summary>The customer's name as supplied for the order or receipt.</summary>
+    public string? Name { get; init; }
+
+    /// <summary>The Australian Business Number associated with the customer or business account, where supplied.</summary>
+    public string? Abn { get; init; }
+
+    /// <summary>The customer's business cost centre number used for internal account allocation or reporting, where supplied.</summary>
+    public string? CostCentreNumber { get; init; }
+
+    /// <summary>The purchase order number provided by the customer or business account.</summary>
+    public string? PoNumber { get; init; }
+
+    /// <summary>The customer's email address as supplied for the order or receipt.</summary>
+    public string? Email { get; init; }
+
+    /// <summary>The customer's billing, delivery, or account address as supplied for the order or receipt.</summary>
+    public string? Address { get; init; }
+
+    /// <summary>Builds the customer context of a receipt. Null if the receipt has no customer or invoice details.</summary>
+    public static ReceiptCustomerContext? From(Receipt receipt)
+    {
+        var details = receipt.InvoiceDetails;
+
+        if (receipt.CustomerId is null && details is null)
+        {
+            return null;
+        }
+
+        return new ReceiptCustomerContext
+        {
+            Customer = receipt.CustomerId is null ? null : new Customer(receipt.CustomerId),
+            Name = details?.Name,
+            Abn = details?.Abn,
+            CostCentreNumber = details?.CostCentreNumber,
+            PoNumber = details?.PoNumber,
+            Email = details?.Email,
+            Address = details?.Address,
+        };
+    }
+}
+
 /// <summary>The properties of the receipt related to Flybuys.</summary>
+[GraphQLName("TransactionFlybuys")]
 public sealed record ReceiptFlybuys
 {
     /// <summary>The scannable 13-digit EAN-13 barcode number of the Flybuys card attached to the transaction.</summary>
@@ -80,6 +133,7 @@ public sealed record ReceiptFlybuys
 }
 
 /// <summary>A single payment method or instrument applied to a transaction at checkout.</summary>
+[GraphQLName("TransactionTender")]
 public sealed record ReceiptTender
 {
     /// <summary>The unique identifier for the tender line, used to tell split payments apart.</summary>
@@ -106,6 +160,7 @@ public sealed record ReceiptTender
 }
 
 /// <summary>The payment summary for a receipt, including purchase, refund and cash-out amounts and payment details.</summary>
+[GraphQLName("TransactionPayment")]
 public sealed record ReceiptPayment
 {
     /// <summary>The total purchase amount paid by the customer, excluding any refund or cash-out component.</summary>
@@ -125,6 +180,7 @@ public sealed record ReceiptPayment
 }
 
 /// <summary>The payment method or card details used for a payment transaction.</summary>
+[GraphQLName("TransactionPaymentMethod")]
 public sealed record ReceiptPaymentMethod
 {
     /// <summary>The payment method type.</summary>
@@ -138,6 +194,7 @@ public sealed record ReceiptPaymentMethod
 }
 
 /// <summary>Additional merchant, terminal, card and authorisation metadata captured for a payment.</summary>
+[GraphQLName("TransactionPaymentMetadata")]
 public sealed record ReceiptPaymentMetadata
 {
     /// <summary>The merchant display name associated with the payment transaction.</summary>

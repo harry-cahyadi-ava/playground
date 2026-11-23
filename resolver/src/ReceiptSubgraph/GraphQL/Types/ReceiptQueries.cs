@@ -20,7 +20,8 @@ public static partial class ReceiptQueries
     private const string UnauthorizedMessage = "A signed-in customer is required to view receipts.";
     private const string InternalErrorMessage = "An unexpected error occurred while retrieving receipts.";
 
-    /// <summary>Get the receipt for the given ID.</summary>
+    /// <summary>Get the transaction for the given ID.</summary>
+    [GraphQLName("transaction")]
     public static async Task<IReceiptResponse> GetReceiptAsync(
         [ID] string id,
         IResolverContext context,
@@ -48,7 +49,8 @@ public static partial class ReceiptQueries
         }
     }
 
-    /// <summary>Get a paginated list of the signed-in customer's receipts, newest first.</summary>
+    /// <summary>Get a paginated list of the signed-in customer's transactions, newest first.</summary>
+    [GraphQLName("transactions")]
     public static async Task<IReceiptsResponse> GetReceiptsAsync(
         ReceiptResultInput? input,
         IResolverContext context,

@@ -15,9 +15,12 @@ public static partial class ReceiptNode
     /// <summary>The store associated with this receipt (a reference the Store subgraph completes).</summary>
     public static Store GetStore([Parent] Receipt receipt) => new(receipt.StoreId);
 
-    /// <summary>The customer associated with the receipt. Null for anonymous purchases.</summary>
-    public static Customer? GetCustomer([Parent] Receipt receipt)
-        => receipt.CustomerId is null ? null : new Customer(receipt.CustomerId);
+    /// <summary>
+    /// The customer details of the receipt. Null if the receipt has no associated customer details
+    /// (e.g. an anonymous in-store purchase).
+    /// </summary>
+    public static ReceiptCustomerContext? GetCustomerContext([Parent] Receipt receipt)
+        => ReceiptCustomerContext.From(receipt);
 
     /// <summary>The online order associated with this receipt. Null if it is not for an online order.</summary>
     public static Order? GetOrder([Parent] Receipt receipt)

@@ -5,6 +5,7 @@ using ReceiptSubgraph.Paging;
 namespace ReceiptSubgraph.Domain;
 
 /// <summary>The purchased item contained within the receipt.</summary>
+[GraphQLName("TransactionItem")]
 public sealed record ReceiptItem
 {
     /// <summary>The properties of the receipt item captured at the time of the receipt.</summary>
@@ -21,7 +22,7 @@ public sealed record ReceiptItem
 }
 
 /// <summary>Either a purchased product or a carrier bag line-item.</summary>
-[UnionType("ReceiptItemDetails")]
+[UnionType("TransactionItemDetails")]
 public interface IReceiptItemDetails;
 
 /// <summary>
@@ -29,6 +30,7 @@ public interface IReceiptItemDetails;
 /// Static properties (name, prices) reflect what the customer saw at the time of purchase, while the
 /// dynamic <c>product</c> reference reflects the current state of the product.
 /// </summary>
+[GraphQLName("TransactionItemProduct")]
 public sealed record ReceiptItemProduct : IReceiptItemDetails
 {
     /// <summary>Id of the product in the Product subgraph; exposed through the <c>product</c> reference field.</summary>
@@ -71,6 +73,7 @@ public sealed record ReceiptItemProduct : IReceiptItemDetails
 }
 
 /// <summary>The object representing a bag as a line-item in the receipt.</summary>
+[GraphQLName("TransactionItemBag")]
 public sealed record ReceiptItemBag : IReceiptItemDetails
 {
     /// <summary>The number of bags charged.</summary>
@@ -84,6 +87,7 @@ public sealed record ReceiptItemBag : IReceiptItemDetails
 }
 
 /// <summary>The properties of the promotion attached to a receipt item.</summary>
+[GraphQLName("TransactionItemPromotion")]
 public sealed record ReceiptItemPromotion
 {
     public ReceiptItemPromotionType? Type { get; init; }
@@ -92,6 +96,7 @@ public sealed record ReceiptItemPromotion
 }
 
 /// <summary>The item that was substituted in place of the item in the receipt.</summary>
+[GraphQLName("TransactionSubstitutedItem")]
 public sealed record ReceiptSubstitutedItem
 {
     /// <summary>The product that was substituted.</summary>
@@ -102,6 +107,7 @@ public sealed record ReceiptSubstitutedItem
 /// <param name="Edges">The receipt items in the requested page, each with its own cursor, in the order they appear on the receipt.</param>
 /// <param name="PageInfo">The details about the page of receipt items returned.</param>
 /// <param name="TotalCount">The total number of items on the receipt, across all pages.</param>
+[GraphQLName("TransactionItemConnection")]
 public sealed record ReceiptItemConnection(IReadOnlyList<ReceiptItemEdge> Edges, PageInfo PageInfo, int TotalCount)
 {
     public static ReceiptItemConnection From(Page<ReceiptItem> page)
@@ -111,4 +117,5 @@ public sealed record ReceiptItemConnection(IReadOnlyList<ReceiptItemEdge> Edges,
 /// <summary>A receipt item together with the cursor that identifies its position in the connection.</summary>
 /// <param name="Cursor">The cursor of this item, for use as <c>after</c> or <c>before</c>.</param>
 /// <param name="Node">The receipt item.</param>
+[GraphQLName("TransactionItemEdge")]
 public sealed record ReceiptItemEdge(string Cursor, ReceiptItem Node);

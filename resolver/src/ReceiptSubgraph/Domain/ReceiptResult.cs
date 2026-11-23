@@ -11,7 +11,7 @@ namespace ReceiptSubgraph.Domain;
 /// <remarks>
 /// Equality is value based (including the id list).
 /// </remarks>
-[GraphQLName("ReceiptResultFilterInput")]
+[GraphQLName("TransactionResultFilterInput")]
 public sealed record ReceiptFilter : IEquatable<ReceiptFilter>
 {
     /// <summary>The ids of the orders that returned receipts must have.</summary>
@@ -68,14 +68,15 @@ public sealed record ReceiptFilter : IEquatable<ReceiptFilter>
             || (left is not null && right is not null && left.SequenceEqual(right));
 }
 
-/// <summary>The input for the receipts query.</summary>
-[GraphQLName("ReceiptsInput")]
+/// <summary>The input for the transactions query.</summary>
+[GraphQLName("TransactionsInput")]
 public sealed record ReceiptResultInput(ReceiptFilter? Filter = null, PageRequest? Pagination = null);
 
 /// <summary>The receipts in the requested page, with the details about the page.</summary>
 /// <param name="Edges">The receipts in the requested page, each with its own cursor. Ordered by creation date, newest first.</param>
 /// <param name="PageInfo">The details about the page of receipts returned.</param>
 /// <param name="TotalCount">The total number of receipts matching the filter, across all pages.</param>
+[GraphQLName("TransactionConnection")]
 public sealed record ReceiptConnection(IReadOnlyList<ReceiptEdge> Edges, PageInfo PageInfo, int TotalCount) : IReceiptsResponse
 {
     public static ReceiptConnection From(Page<Receipt> page)
@@ -85,4 +86,5 @@ public sealed record ReceiptConnection(IReadOnlyList<ReceiptEdge> Edges, PageInf
 /// <summary>A receipt together with the cursor that identifies its position in the connection.</summary>
 /// <param name="Cursor">The cursor of this receipt, for use as <c>after</c> or <c>before</c>.</param>
 /// <param name="Node">The receipt.</param>
+[GraphQLName("TransactionEdge")]
 public sealed record ReceiptEdge(string Cursor, Receipt Node);
