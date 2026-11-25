@@ -19,7 +19,7 @@ public static partial class ReceiptNode
     /// The customer details of the receipt. Null if the receipt has no associated customer details
     /// (e.g. an anonymous in-store purchase).
     /// </summary>
-    public static ReceiptCustomerContext? GetCustomerContext([Parent] Receipt receipt)
+    public static ReceiptCustomerContext? GetCustomer([Parent] Receipt receipt)
         => ReceiptCustomerContext.From(receipt);
 
     /// <summary>The online order associated with this receipt. Null if it is not for an online order.</summary>

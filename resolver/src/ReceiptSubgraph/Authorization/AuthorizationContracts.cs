@@ -34,8 +34,6 @@ public sealed record UserContext
     /// <summary>The id of the signed-in customer (the JWT <c>sub</c> claim). Receipts are only ever returned for this customer.</summary>
     public string? CustomerId { get; init; }
 
-    /// <summary>The loyalty association code taken from the optional <c>loyalty-association</c> request header. Null when the header is absent or blank.</summary>
-    public string? LoyaltyAssociationCode { get; init; }
 }
 
 /// <summary>Validates the standard <c>Authorization</c> bearer token, checks the caller's roles and extracts the user.</summary>

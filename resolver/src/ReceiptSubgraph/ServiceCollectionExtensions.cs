@@ -51,9 +51,8 @@ public static class ServiceCollectionExtensions
         });
         services.AddSingleton<IAuthorizationHandler, AuthorizationHandler>();
 
-        // Replace with a real implementation (e.g. Digital Receipt Service client) to leave the sample data behind.
-        services.AddSingleton<IReceiptRepository>(sp =>
-            new InMemoryReceiptRepository(SampleReceiptData.Create(), sp.GetRequiredService<PaginationOptions>()));
+        // TODO: Decide the lifetime once the data access dependency is known (e.g. scoped for a DbContext).
+        services.AddSingleton<IReceiptRepository, ReceiptRepository>();
 
         services
             .AddGraphQLServer()

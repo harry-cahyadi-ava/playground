@@ -7,6 +7,7 @@ using ReceiptSubgraph.Authorization;
 using ReceiptSubgraph.Data;
 using ReceiptSubgraph.Domain;
 using ReceiptSubgraph.Paging;
+using ReceiptSubgraph.Tests.Data;
 
 namespace ReceiptSubgraph.Tests;
 
@@ -47,8 +48,7 @@ internal sealed class SubgraphHarness : IAsyncDisposable
     public async Task<JsonDocument> QueryAsync(
         string query,
         Dictionary<string, object?>? variables = null,
-        string? customerId = null,
-        string? loyaltyAssociationCode = null)
+        string? customerId = null)
     {
         var request = OperationRequestBuilder.New().SetDocument(query);
 
@@ -59,9 +59,7 @@ internal sealed class SubgraphHarness : IAsyncDisposable
 
         if (customerId is not null)
         {
-            request.SetGlobalState(
-                UserContext.GlobalStateKey,
-                new UserContext { CustomerId = customerId, LoyaltyAssociationCode = loyaltyAssociationCode });
+            request.SetGlobalState(UserContext.GlobalStateKey, new UserContext { CustomerId = customerId });
         }
 
         var result = await Executor.ExecuteAsync(request.Build(), TestContext.Current.CancellationToken);

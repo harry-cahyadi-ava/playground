@@ -10,13 +10,12 @@ namespace ReceiptSubgraph.Infrastructure;
 
 /// <summary>
 /// Authorises every GraphQL HTTP request before it executes: the <c>Authorization</c> header is validated for the
-/// required roles and the user's properties, together with the optional <c>loyalty-association</c> header, are
-/// stored in the request's global state under <see cref="UserContext.GlobalStateKey"/>.
+/// required roles and the user's properties are stored in the request's global state under
+/// <see cref="UserContext.GlobalStateKey"/>.
 /// </summary>
 public sealed class RequestInterceptor : DefaultHttpRequestInterceptor
 {
     public const string AuthorizationHeader = "Authorization";
-    public const string LoyaltyAssociationHeader = "loyalty-association";
     public const string UnauthenticatedCode = "UNAUTHENTICATED";
     public const string ForbiddenCode = "FORBIDDEN";
 
@@ -46,19 +45,11 @@ public sealed class RequestInterceptor : DefaultHttpRequestInterceptor
 
             if (result.User is not null)
             {
-                requestBuilder.SetGlobalState(UserContext.GlobalStateKey, WithOptionalHeaders(result.User, context));
+                requestBuilder.SetGlobalState(UserContext.GlobalStateKey, result.User);
             }
         }
 
         await base.OnCreateAsync(context, requestExecutor, requestBuilder, cancellationToken);
-    }
-
-    // Optional headers never reject the request; an absent or blank header simply leaves the property null.
-    private static UserContext WithOptionalHeaders(UserContext user, HttpContext context)
-    {
-        var loyaltyAssociationCode = context.Request.Headers[LoyaltyAssociationHeader].ToString().Trim();
-
-        return loyaltyAssociationCode.Length > 0 ? user with { LoyaltyAssociationCode = loyaltyAssociationCode } : user;
     }
 
     private static string GetBearerToken(HttpContext context, string headerName)

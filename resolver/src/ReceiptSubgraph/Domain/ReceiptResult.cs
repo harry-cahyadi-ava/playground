@@ -26,7 +26,7 @@ public sealed record ReceiptFilter : IEquatable<ReceiptFilter>
     public StoreBrand? StoreBrand { get; init; }
 
     /// <summary>The sales channel of the store that returned receipts must have.</summary>
-    public StoreSalesChannel? StoreSalesChannel { get; init; }
+    public TransactionSalesChannel? SalesChannel { get; init; }
 
     /// <summary>The earliest date (inclusive) that returned receipts must have.</summary>
     public DateTimeOffset? DateFrom { get; init; }
@@ -38,7 +38,7 @@ public sealed record ReceiptFilter : IEquatable<ReceiptFilter>
         => other is not null
             && StoreId == other.StoreId
             && StoreBrand == other.StoreBrand
-            && StoreSalesChannel == other.StoreSalesChannel
+            && SalesChannel == other.SalesChannel
             && DateFrom == other.DateFrom
             && DateTo == other.DateTo
             && SequenceEqual(OrderIds, other.OrderIds);
@@ -48,7 +48,7 @@ public sealed record ReceiptFilter : IEquatable<ReceiptFilter>
         var hash = new HashCode();
         hash.Add(StoreId);
         hash.Add(StoreBrand);
-        hash.Add(StoreSalesChannel);
+        hash.Add(SalesChannel);
         hash.Add(DateFrom);
         hash.Add(DateTo);
 
@@ -68,9 +68,27 @@ public sealed record ReceiptFilter : IEquatable<ReceiptFilter>
             || (left is not null && right is not null && left.SequenceEqual(right));
 }
 
+/// <summary>The input for the transaction query.</summary>
+[GraphQLName("TransactionInput")]
+public sealed record ReceiptByIdInput
+{
+    /// <summary>The transaction ID to find.</summary>
+    [ID]
+    public required string Id { get; init; }
+
+    /// <summary>Encoded value of the loyalty association number (e.g. flybuys).</summary>
+    public string? LoyaltyAssociationCode { get; init; }
+}
+
 /// <summary>The input for the transactions query.</summary>
+/// <param name="Filter">The filter to apply when selecting receipts.</param>
+/// <param name="Pagination">The page of receipts to return.</param>
+/// <param name="LoyaltyAssociationCode">Encoded value of the loyalty association number (e.g. flybuys).</param>
 [GraphQLName("TransactionsInput")]
-public sealed record ReceiptResultInput(ReceiptFilter? Filter = null, PageRequest? Pagination = null);
+public sealed record ReceiptResultInput(
+    ReceiptFilter? Filter = null,
+    PageRequest? Pagination = null,
+    string? LoyaltyAssociationCode = null);
 
 /// <summary>The receipts in the requested page, with the details about the page.</summary>
 /// <param name="Edges">The receipts in the requested page, each with its own cursor. Ordered by creation date, newest first.</param>

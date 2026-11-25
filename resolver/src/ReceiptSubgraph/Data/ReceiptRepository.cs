@@ -4,33 +4,35 @@ using ReceiptSubgraph.Paging;
 namespace ReceiptSubgraph.Data;
 
 /// <summary>
-/// Database-backed <see cref="IReceiptRepository"/>. Filtering, ordering and paging happen in the query, and the
-/// fetched rows are mapped to <see cref="Receipt"/> afterwards so the mapping cost is bounded by the page size.
+/// <see cref="IReceiptRepository"/> that simulates a database with a hard-coded set of receipts
+/// (<see cref="SimulatedReceiptData"/>). Filtering, ordering and paging are written as a single LINQ query over the
+/// rows, with only the page that is returned being materialised, so replacing it with a real data source later
+/// only means swapping <see cref="Query"/>.
 /// </summary>
-// TODO: Register this in ServiceCollectionExtensions in place of InMemoryReceiptRepository (decide the lifetime
-// based on the data access library, e.g. scoped for a DbContext, singleton for a connection factory).
 public sealed class ReceiptRepository : IReceiptRepository
 {
     private readonly PaginationOptions _paginationOptions;
 
-    // TODO: Inject the data access dependency (e.g. a DbContext, IDbConnectionFactory or DataSource), the row
-    // mapper and a logger as needed.
     public ReceiptRepository(PaginationOptions paginationOptions)
     {
         _paginationOptions = paginationOptions;
     }
+
+    // Stands in for the receipts table. Each call starts a new query, as a DbSet or table would.
+    private static IQueryable<Receipt> Query => SimulatedReceiptData.Receipts.AsQueryable();
 
     public ValueTask<IReadOnlyDictionary<string, Receipt>> GetByIdsAsync(
         ReceiptUserContext user,
         IReadOnlyList<string> receiptIds,
         CancellationToken cancellationToken)
     {
-        // TODO: Fetch all ids in a single query (WHERE CustomerId = @user.CustomerId AND Id IN (...)), not one query per id.
-        // Receipts owned by another customer (or by no customer) must not be returned or mapped.
-        // TODO: Load child data (items, payments, etc.) with batched queries keyed by the fetched receipt ids.
-        // TODO: Map only the returned rows to Receipt.
-        // TODO: Return a dictionary keyed by receipt id. Ids without a row must be absent from the dictionary.
-        throw new NotImplementedException();
+        // One query for all ids (WHERE CustomerId = @customer AND Id IN (...)). Receipts owned by another customer
+        // (or by no customer) never match, and ids without a row are absent from the dictionary.
+        var receipts = Query
+            .Where(r => r.CustomerId == user.CustomerId && receiptIds.Contains(r.Id))
+            .ToDictionary(r => r.Id);
+
+        return ValueTask.FromResult<IReadOnlyDictionary<string, Receipt>>(receipts);
     }
 
     public ValueTask<Page<Receipt>> GetByCustomerAsync(
@@ -38,17 +40,79 @@ public sealed class ReceiptRepository : IReceiptRepository
         ReceiptResultInput? input,
         CancellationToken cancellationToken)
     {
-        // TODO: Translate input.Filter into WHERE clauses (OrderIds, StoreId, StoreBrand, StoreSalesChannel,
-        // DateFrom/DateTo, both inclusive). An empty OrderIds list means "match nothing", not "no order filter".
-        // TODO: Restrict to the customer (WHERE CustomerId = @user.CustomerId). Receipts without a customer are never listed.
-        // TODO: Use user.LoyaltyAssociationCode if the query depends on it.
-        // TODO: Order by CreatedAt DESC, then Id, so offset cursors stay stable between requests.
-        // TODO: Run a COUNT for TotalCount (or COUNT(*) OVER() in the same query).
-        // TODO: Work out the page window with Paginator.ComputeWindow(input?.Pagination, _paginationOptions, totalCount).
-        // Invalid arguments throw InvalidPaginationException.
-        // TODO: Fetch only that window (OFFSET window.Start, FETCH window.Count), then map those rows to Receipt.
-        // TODO: Return Paginator.BuildPage(receipts, window.Start, totalCount). Use Page.Empty<Receipt>() when
-        // nothing matches.
-        throw new NotImplementedException();
+        var filter = input?.Filter;
+
+        // An empty order id list means "match nothing", not "no order filter".
+        if (filter?.OrderIds is { Count: 0 })
+        {
+            return ValueTask.FromResult(Page.Empty<Receipt>());
+        }
+
+        // Receipts without a customer are never listed. The loyalty association code is not used by this simulated store.
+        var query = Query.Where(r => r.CustomerId == user.CustomerId);
+
+        if (filter is not null)
+        {
+            query = ApplyFilter(query, filter);
+        }
+
+        // Newest first, with the id as tie-breaker so offset cursors stay stable between requests.
+        var ordered = query
+            .OrderByDescending(r => r.CreatedAt)
+            .ThenBy(r => r.Id);
+
+        var totalCount = ordered.Count();
+
+        if (totalCount == 0)
+        {
+            return ValueTask.FromResult(Page.Empty<Receipt>());
+        }
+
+        // Invalid paging arguments throw InvalidPaginationException.
+        var window = Paginator.ComputeWindow(input?.Pagination, _paginationOptions, totalCount);
+
+        // OFFSET window.Start FETCH window.Count
+        var receipts = ordered
+            .Skip(window.Start)
+            .Take(window.Count)
+            .ToList();
+
+        return ValueTask.FromResult(Paginator.BuildPage(receipts, window.Start, totalCount));
+    }
+
+    // Every property that is set must match (intersection); unset properties are ignored.
+    private static IQueryable<Receipt> ApplyFilter(IQueryable<Receipt> query, ReceiptFilter filter)
+    {
+        if (filter.OrderIds is { } orderIds)
+        {
+            query = query.Where(r => r.OrderId != null && orderIds.Contains(r.OrderId));
+        }
+
+        if (filter.StoreId is { } storeId)
+        {
+            query = query.Where(r => r.StoreId == storeId);
+        }
+
+        if (filter.StoreBrand is { } storeBrand)
+        {
+            query = query.Where(r => r.StoreBrand == storeBrand);
+        }
+
+        if (filter.SalesChannel is { } salesChannel)
+        {
+            query = query.Where(r => r.SalesChannel == salesChannel);
+        }
+
+        if (filter.DateFrom is { } dateFrom)
+        {
+            query = query.Where(r => r.CreatedAt >= dateFrom);
+        }
+
+        if (filter.DateTo is { } dateTo)
+        {
+            query = query.Where(r => r.CreatedAt <= dateTo);
+        }
+
+        return query;
     }
 }

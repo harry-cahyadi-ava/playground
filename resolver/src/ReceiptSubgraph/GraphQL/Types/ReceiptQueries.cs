@@ -23,16 +23,18 @@ public static partial class ReceiptQueries
     /// <summary>Get the transaction for the given ID.</summary>
     [GraphQLName("transaction")]
     public static async Task<IReceiptResponse> GetReceiptAsync(
-        [ID] string id,
+        ReceiptByIdInput input,
         IResolverContext context,
         IReceiptByIdDataLoader receiptById,
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
-        if (context.GetReceiptUserContext() is not { } user)
+        if (context.GetReceiptUserContext(input.LoyaltyAssociationCode) is not { } user)
         {
             return new UnauthorizedError(UnauthorizedMessage);
         }
+
+        var id = input.Id;
 
         try
         {
@@ -58,7 +60,7 @@ public static partial class ReceiptQueries
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
-        if (context.GetReceiptUserContext() is not { } user)
+        if (context.GetReceiptUserContext(input?.LoyaltyAssociationCode) is not { } user)
         {
             return new UnauthorizedError(UnauthorizedMessage);
         }

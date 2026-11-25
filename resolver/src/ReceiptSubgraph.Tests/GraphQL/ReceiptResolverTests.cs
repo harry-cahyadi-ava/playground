@@ -115,11 +115,11 @@ public class ReceiptResolverTests : IAsyncLifetime
     public async Task Receipt_exposes_references_to_store_customer_and_order()
     {
         var entities = await EntitiesAsync(
-            "... on Transaction { store { id } customerContext { customer { id } } order { id } }",
+            "... on Transaction { store { id } customer { customer { id } } order { id } }",
             ("Transaction", "receipt-2"));
 
         Assert.Equal("store-0100", entities[0].GetProperty("store").GetProperty("id").GetString());
-        Assert.Equal("customer-1", entities[0].GetProperty("customerContext").GetProperty("customer").GetProperty("id").GetString());
+        Assert.Equal("customer-1", entities[0].GetProperty("customer").GetProperty("customer").GetProperty("id").GetString());
         Assert.Equal("order-1001", entities[0].GetProperty("order").GetProperty("id").GetString());
     }
 
@@ -129,13 +129,13 @@ public class ReceiptResolverTests : IAsyncLifetime
         await using var harness = await SubgraphHarness.CreateAsync([TestReceipts.Create("r1", orderId: null, storeId: "store-9")]);
 
         var result = await harness.QueryAsync(
-            EntitiesQuery.Replace("%SELECTION%",             "... on Transaction { store { id } customerContext { customer { id } } order { id } }"),
-                        Reps(("Transaction", "r1")),
+            EntitiesQuery.Replace("%SELECTION%", "... on Transaction { store { id } customer { customer { id } } order { id } }"),
+            Reps(("Transaction", "r1")),
             customerId: "customer-1");
 
         var receipt = result.RootElement.GetProperty("data").GetProperty("_entities")[0];
         Assert.Equal("store-9", receipt.GetProperty("store").GetProperty("id").GetString());
-                    Assert.Equal("customer-1", receipt.GetProperty("customerContext").GetProperty("customer").GetProperty("id").GetString());
+        Assert.Equal("customer-1", receipt.GetProperty("customer").GetProperty("customer").GetProperty("id").GetString());
         Assert.Equal(JsonValueKind.Null, receipt.GetProperty("order").ValueKind);
     }
 
@@ -205,7 +205,7 @@ public class ReceiptResolverTests : IAsyncLifetime
             """
             ... on Transaction {
               invoiceType
-              customerContext { name abn poNumber email }
+              customer { name abn poNumber email }
               items { edges { node {
                 promotion { type originalUnitPrice }
                 substitutions { product { name unitPrice } }
@@ -216,8 +216,8 @@ public class ReceiptResolverTests : IAsyncLifetime
 
         var receipt = entities[0];
         Assert.Equal("CREATED", receipt.GetProperty("invoiceType").GetString());
-        Assert.Equal("51 824 753 556", receipt.GetProperty("customerContext").GetProperty("abn").GetString());
-        Assert.Equal(JsonValueKind.Null, receipt.GetProperty("customerContext").GetProperty("email").ValueKind);
+        Assert.Equal("51 824 753 556", receipt.GetProperty("customer").GetProperty("abn").GetString());
+        Assert.Equal(JsonValueKind.Null, receipt.GetProperty("customer").GetProperty("email").ValueKind);
 
         var items = receipt.GetProperty("items").GetProperty("edges").EnumerateArray().Select(e => e.GetProperty("node")).ToList();
         Assert.Equal("COLES_PLUS_SAVER_DISCOUNT", items[0].GetProperty("promotion").GetProperty("type").GetString());
@@ -293,7 +293,7 @@ public class ReceiptResolverTests : IAsyncLifetime
             """
             {
               transactions(input: {
-                filter: { storeSalesChannel: COLES_ONLINE, dateFrom: "2025-11-01T00:00:00Z" }
+                filter: { salesChannel: COLES_ONLINE, dateFrom: "2025-11-01T00:00:00Z" }
                 pagination: { first: 1 }
               }) { ... on TransactionConnection { edges { node { id } } pageInfo { hasNextPage } totalCount } }
             }
@@ -380,12 +380,12 @@ public class ReceiptResolverTests : IAsyncLifetime
     public async Task Receipt_by_id_returns_the_customers_receipt()
     {
         var data = await ReceiptsAsync(
-            "{ transaction(id: \"receipt-2\") { __typename ... on Transaction { id customerContext { customer { id } } order { id } } } }");
+            "{ transaction(input: { id: \"receipt-2\" }) { __typename ... on Transaction { id customer { customer { id } } order { id } } } }");
 
         var receipt = data.GetProperty("transaction");
         Assert.Equal("Transaction", receipt.GetProperty("__typename").GetString());
         Assert.Equal("receipt-2", receipt.GetProperty("id").GetString());
-        Assert.Equal("customer-1", receipt.GetProperty("customerContext").GetProperty("customer").GetProperty("id").GetString());
+        Assert.Equal("customer-1", receipt.GetProperty("customer").GetProperty("customer").GetProperty("id").GetString());
     }
 
     [Fact]
@@ -394,9 +394,9 @@ public class ReceiptResolverTests : IAsyncLifetime
         var data = await ReceiptsAsync(
             """
             {
-              first: transaction(id: "receipt-1") { ... on Transaction { id } }
-              second: transaction(id: "receipt-2") { ... on Transaction { id } }
-              again: transaction(id: "receipt-1") { ... on Transaction { id } }
+              first: transaction(input: { id: "receipt-1" }) { ... on Transaction { id } }
+              second: transaction(input: { id: "receipt-2" }) { ... on Transaction { id } }
+              again: transaction(input: { id: "receipt-1" }) { ... on Transaction { id } }
             }
             """);
 
@@ -411,16 +411,39 @@ public class ReceiptResolverTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task The_loyalty_association_code_reaches_the_repository_with_the_customer()
+    public async Task The_loyalty_association_code_in_the_query_input_reaches_the_repository_with_the_customer()
     {
-        await _harness.QueryAsync(
-            "{ transaction(id: \"receipt-1\") { __typename } transactions { __typename } }",
-            customerId: "customer-1",
-            loyaltyAssociationCode: "ABC123");
+        var data = await ReceiptsAsync(
+            """
+            {
+              transaction(input: { id: "receipt-1", loyaltyAssociationCode: "ABC123" }) { __typename }
+              transactions(input: { loyaltyAssociationCode: "  ABC123  " }) { __typename }
+            }
+            """);
+
+        Assert.Equal("Transaction", data.GetProperty("transaction").GetProperty("__typename").GetString());
 
         var expected = new ReceiptUserContext("customer-1", "ABC123");
         Assert.Equal(expected, Assert.Single(_harness.Repository.IdLookups).User);
-        Assert.Equal(expected, Assert.Single(_harness.Repository.CustomerLookups).User);
+
+        var listing = Assert.Single(_harness.Repository.CustomerLookups);
+        Assert.Equal(expected, listing.User);
+        Assert.Equal("  ABC123  ", listing.Input?.LoyaltyAssociationCode);
+    }
+
+    [Fact]
+    public async Task A_missing_or_blank_loyalty_association_code_is_null_for_the_repository()
+    {
+        await ReceiptsAsync(
+            """
+            {
+              transaction(input: { id: "receipt-1", loyaltyAssociationCode: "  " }) { __typename }
+              transactions { __typename }
+            }
+            """);
+
+        Assert.Null(Assert.Single(_harness.Repository.IdLookups).User.LoyaltyAssociationCode);
+        Assert.Null(Assert.Single(_harness.Repository.CustomerLookups).User.LoyaltyAssociationCode);
     }
 
     [Fact]
@@ -429,7 +452,7 @@ public class ReceiptResolverTests : IAsyncLifetime
         await ReceiptsAsync(
             """
             {
-              transaction(id: "receipt-1") { __typename }
+              transaction(input: { id: "receipt-1" }) { __typename }
               transactions(input: { filter: { storeId: "store-1" } }) { __typename }
             }
             """);
@@ -448,7 +471,7 @@ public class ReceiptResolverTests : IAsyncLifetime
     public async Task Receipt_by_id_is_not_found_unless_the_signed_in_customer_owns_it(string customerId, string receiptId)
     {
         var data = await ReceiptsAsync(
-            $"{{ transaction(id: \"{receiptId}\") {{ __typename ... on NotFoundError {{ message }} }} }}",
+            $"{{ transaction(input: {{ id: \"{receiptId}\" }}) {{ __typename ... on NotFoundError {{ message }} }} }}",
             customerId);
 
         var result = data.GetProperty("transaction");
@@ -462,7 +485,7 @@ public class ReceiptResolverTests : IAsyncLifetime
     public async Task Queries_without_a_signed_in_customer_are_unauthorized_and_never_reach_the_repository(string? customerId)
     {
         var data = await ReceiptsAsync(
-            "{ transaction(id: \"receipt-1\") { __typename } transactions { __typename ... on UnauthorizedError { message } } }",
+            "{ transaction(input: { id: \"receipt-1\" }) { __typename } transactions { __typename ... on UnauthorizedError { message } } }",
             customerId);
 
         Assert.Equal("UnauthorizedError", data.GetProperty("transaction").GetProperty("__typename").GetString());
@@ -477,7 +500,7 @@ public class ReceiptResolverTests : IAsyncLifetime
         _harness.Repository.FailWith(new InvalidOperationException("database is down"));
 
         var data = await ReceiptsAsync(
-            "{ transaction(id: \"receipt-1\") { __typename } transactions { __typename ... on InternalServerError { message } } }");
+            "{ transaction(input: { id: \"receipt-1\" }) { __typename } transactions { __typename ... on InternalServerError { message } } }");
 
         Assert.Equal("InternalServerError", data.GetProperty("transaction").GetProperty("__typename").GetString());
         Assert.Equal("InternalServerError", data.GetProperty("transactions").GetProperty("__typename").GetString());

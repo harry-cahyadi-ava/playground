@@ -35,9 +35,8 @@ public sealed record Receipt : IReceiptResponse
     [GraphQLIgnore]
     public StoreBrand StoreBrand { get; init; }
 
-    /// <summary>Sales channel of the store; only used to filter receipts.</summary>
-    [GraphQLIgnore]
-    public StoreSalesChannel StoreSalesChannel { get; init; }
+    /// <summary>The sales channel for this transaction.</summary>
+    public TransactionSalesChannel? SalesChannel { get; init; }
 
     [GraphQLIgnore]
     public IReadOnlyList<ReceiptItem> Items { get; init; } = [];
@@ -60,7 +59,7 @@ public sealed record Receipt : IReceiptResponse
     /// <summary>The invoice type for Coles online orders. Null if it is not a Coles online order.</summary>
     public ReceiptInvoiceType? InvoiceType { get; init; }
 
-    /// <summary>The details captured for tax invoice purposes; exposed through <c>customerContext</c>.</summary>
+    /// <summary>The details captured for tax invoice purposes; exposed through <c>customer</c>.</summary>
     [GraphQLIgnore]
     public ReceiptInvoiceDetails? InvoiceDetails { get; init; }
 

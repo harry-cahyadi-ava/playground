@@ -12,7 +12,7 @@ internal static class TestReceipts
         string? orderId = null,
         string storeId = "store-1",
         StoreBrand brand = StoreBrand.ColesSupermarket,
-        StoreSalesChannel channel = StoreSalesChannel.ColesSupermarket,
+        TransactionSalesChannel channel = TransactionSalesChannel.ColesSupermarket,
         int itemCount = 0)
         => new()
         {
@@ -22,7 +22,7 @@ internal static class TestReceipts
             OrderId = orderId,
             StoreId = storeId,
             StoreBrand = brand,
-            StoreSalesChannel = channel,
+            SalesChannel = channel,
             Amount = new ReceiptAmount
             {
                 Total = 10m,

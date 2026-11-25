@@ -102,7 +102,7 @@ public enum StoreBrand
 }
 
 /// <summary>The sales channel of the store.</summary>
-public enum StoreSalesChannel
+public enum TransactionSalesChannel
 {
     [Metadata("id", "CS")]
     ColesSupermarket,

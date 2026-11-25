@@ -4,8 +4,7 @@ using ReceiptSubgraph.Paging;
 namespace ReceiptSubgraph.Data;
 
 /// <summary>
-/// Data access contract for receipts. Implementations replace the in-memory sample used for local development
-/// (e.g. a client for the Digital Receipt Service).
+/// Data access contract for receipts (e.g. implemented by a client for the Digital Receipt Service).
 /// </summary>
 public interface IReceiptRepository
 {

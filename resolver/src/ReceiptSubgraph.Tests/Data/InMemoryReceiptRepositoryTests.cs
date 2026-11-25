@@ -12,7 +12,7 @@ public class InMemoryReceiptRepositoryTests
     private static readonly Receipt[] Receipts =
     [
         TestReceipts.Create("r1", TestReceipts.Day(1), orderId: "o1", storeId: "s1"),
-        TestReceipts.Create("r3", TestReceipts.Day(3), orderId: "o1", storeId: "s2", channel: StoreSalesChannel.ColesOnline),
+        TestReceipts.Create("r3", TestReceipts.Day(3), orderId: "o1", storeId: "s2", channel: TransactionSalesChannel.ColesOnline),
         TestReceipts.Create("r2", TestReceipts.Day(2), orderId: "o2", storeId: "s1", brand: StoreBrand.Liquorland),
         TestReceipts.Create("r4", TestReceipts.Day(4), customerId: "customer-2", orderId: "o3", storeId: "s1"),
         TestReceipts.Create("anon", TestReceipts.Day(5), customerId: null),
@@ -90,7 +90,7 @@ public class InMemoryReceiptRepositoryTests
     [Fact]
     public async Task Filter_by_sales_channel()
     {
-        var ids = await CustomerReceiptIdsAsync(Input(new ReceiptFilter { StoreSalesChannel = StoreSalesChannel.ColesOnline }));
+        var ids = await CustomerReceiptIdsAsync(Input(new ReceiptFilter { SalesChannel = TransactionSalesChannel.ColesOnline }));
 
         Assert.Equal(["r3"], ids);
     }
